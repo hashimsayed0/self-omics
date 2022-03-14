@@ -2,6 +2,10 @@ import argparse
 from pytorch_lightning import Trainer, seed_everything
 import torch
 import numpy as np
+from models.lit_models import AutoEncoder
+import pytorch_lightning.loggers as pl_loggers
+from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
+import os
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Runs the specified command')
@@ -38,8 +42,8 @@ def parse_arguments():
     parser.add_argument("--pretraining_patience", type=int, default=10)
     parser.add_argument("--downstream_patience", type=int, default=10)
     
-    parser = VAE.add_model_specific_args(parser)
-    parser = Classifier.add_model_specific_args(parser)
+    parser = AutoEncoder.add_model_specific_args(parser)
+    # parser = Classifier.add_model_specific_args(parser)
 
     # add all the available trainer options to argparse
     # ie: now --gpus --num_nodes ... --fast_dev_run all work in the cli
@@ -54,3 +58,11 @@ def set_seeds(seed):
     torch.manual_seed(seed)
     np.random.seed(seed)
     seed_everything(seed, workers=True)
+
+def define_callbacks_loggers_pretraining(param, count):
+    checkpoint_path = os.path.join(param.checkpoint_dir, param.exp_name, 'fold-{}'.format(count))
+    csv_logger = pl_loggers.CSVLogger(checkpoint_path, name='pretraining')
+    early_stopping = EarlyStopping('val_pretext_loss', patience=param.pretraining_patience)
+    model_checkpoint = ModelCheckpoint(csv_logger.log_dir, monitor='val_pretext_loss', mode='min', save_top_k=1)
+    wandb_logger = pl_loggers.WandbLogger(project = 'tcga_contrastive', group = '{}-pretraining'.format(param.exp_name), name = 'fold-{}'.format(count), offline=True)
+    return early_stopping, model_checkpoint, wandb_logger, csv_logger, checkpoint_path
