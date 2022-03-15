@@ -35,6 +35,8 @@ def parse_arguments():
                             help='train/val split ratio')
     parser.add_argument('--num_workers', type=int, default=0,
                             help='number of workers for data loading')
+    parser.add_argument('--split_B', action='store_true',
+                            help='if True, B is split into 23 parts corresponding to the 23 different chromosomes')
     
     
     # trainer related arguments
@@ -50,8 +52,6 @@ def parse_arguments():
     parser = Trainer.add_argparse_args(parser)
     param = parser.parse_args()
     return param
-    
-    return parser.parse_args()
 
 
 def set_seeds(seed):
@@ -59,8 +59,17 @@ def set_seeds(seed):
     np.random.seed(seed)
     seed_everything(seed, workers=True)
 
+def compute_input_shapes(abc_dm):
+    A_shape = abc_dm.A_df.shape[0]
+    if isinstance(abc_dm.B_df, list):
+        B_shape = [B_ch.shape[0] for B_ch in abc_dm.B_df]
+    else:
+        B_shape = abc_dm.B_df.shape[0]
+    C_shape = abc_dm.C_df.shape[0]
+    return A_shape, B_shape, C_shape
+
 def define_callbacks_loggers_pretraining(param, count):
-    checkpoint_path = os.path.join(param.checkpoint_dir, param.exp_name, 'fold-{}'.format(count))
+    checkpoint_path = os.path.join(param.checkpoints_dir, param.exp_name, 'fold-{}'.format(count))
     csv_logger = pl_loggers.CSVLogger(checkpoint_path, name='pretraining')
     early_stopping = EarlyStopping('val_pretext_loss', patience=param.pretraining_patience)
     model_checkpoint = ModelCheckpoint(csv_logger.log_dir, monitor='val_pretext_loss', mode='min', save_top_k=1)

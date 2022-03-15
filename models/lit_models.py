@@ -4,13 +4,13 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
-from .networks import Encoder, Decoder, ProjectionHead
+from .networks import Encoder, Decoder, ProjectionHead, AENet
 from .losses import SimCLR_Loss
 import wandb
 
 
 class AutoEncoder(pl.LightningModule):
-    def __init__(self, input_size_A, input_size_B, input_size_C, latent_size, lr, weight_decay, momentum, drop_p, loss_temperature, batch_size, **config):
+    def __init__(self, input_size_A, input_size_B, input_size_C, latent_size, lr, weight_decay, momentum, drop_p, loss_temperature, split_B, batch_size, **config):
         super(AutoEncoder, self).__init__()
         self.input_size_A = input_size_A
         self.input_size_B = input_size_B
@@ -20,14 +20,9 @@ class AutoEncoder(pl.LightningModule):
         self.weight_decay = weight_decay
         self.momentum = momentum
         self.drop_p = drop_p
-        self.enc_A = Encoder(input_size_A, latent_size, drop_p)
-        self.enc_B = Encoder(input_size_B, latent_size, drop_p)
-        self.enc_C = Encoder(input_size_C, latent_size, drop_p)
-        self.dec_A = Decoder(latent_size, input_size_A, drop_p)
-        self.dec_B = Decoder(latent_size, input_size_B, drop_p)
-        self.dec_C = Decoder(latent_size, input_size_C, drop_p)
+        self.aenet = AENet((input_size_A, input_size_B, input_size_C), latent_size, split_B, dropout_p=drop_p)
         self.projector = ProjectionHead(latent_size, latent_size, latent_size // 2)
-        self.cont_criterion = SimCLR_Loss(batch_size = 128, temperature = 0.5)
+        self.cont_criterion = SimCLR_Loss(batch_size = batch_size, temperature = loss_temperature)
         self.save_hyperparameters()
 
     @staticmethod
@@ -49,12 +44,8 @@ class AutoEncoder(pl.LightningModule):
     
     def training_step(self, batch, batch_idx):
         x_A, x_B, x_C, _ = batch
-        h_A = self.encoder(x_A)
-        h_B = self.encoder(x_B)
-        h_C = self.encoder(x_C)
-        x_A_recon = self.decoder(h_A)
-        x_B_recon = self.decoder(h_B)
-        x_C_recon = self.decoder(h_C)
+        h_A, h_B, h_C = self.aenet.encode((x_A, x_B, x_C))
+        x_A_recon, x_B_recon, x_C_recon = self.aenet.decode((h_A, h_B, h_C))
         recon_loss = F.mse_loss(x_A_recon, x_A) + F.mse_loss(x_B_recon, x_B) + F.mse_loss(x_C_recon, x_C)
         self.log("train_recon_loss", recon_loss, on_step=True, on_epoch=True)
         z_A = self.projector(h_A)
@@ -70,13 +61,12 @@ class AutoEncoder(pl.LightningModule):
         if self.global_step == 0: 
             wandb.define_metric('val_pretext_loss', summary='min')
         x_A, x_B, x_C, _ = batch
-        h_A = self.encoder(x_A)
-        h_B = self.encoder(x_B)
-        h_C = self.encoder(x_C)
-        x_A_recon = self.decoder(h_A)
-        x_B_recon = self.decoder(h_B)
-        x_C_recon = self.decoder(h_C)
-        recon_loss = F.mse_loss(x_A_recon, x_A) + F.mse_loss(x_B_recon, x_B) + F.mse_loss(x_C_recon, x_C)
+        h_A, h_B, h_C = self.aenet.encode((x_A, x_B, x_C))
+        x_A_recon, x_B_recon, x_C_recon = self.aenet.decode((h_A, h_B, h_C))
+        x_B_recon_loss = []
+        for i in range(len(x_B)):
+            x_B_recon_loss.append(F.mse_loss(x_B_recon[i], x_B[i]))
+        recon_loss = F.mse_loss(x_A_recon, x_A) + sum(x_B_recon_loss) + F.mse_loss(x_C_recon, x_C)
         z_A = self.projector(h_A)
         z_B = self.projector(h_B)
         z_C = self.projector(h_C)

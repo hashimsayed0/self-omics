@@ -21,20 +21,22 @@ class ABCDataModule(LightningDataModule):
         if self.param.use_sample_list:
             sample_list_path = os.path.join(self.param.data_dir, 'sample_list.tsv')
             print('Loading sample list from ' + sample_list_path)
-            self.sample_list = np.loadtxt(sample_list_path, delimiter='\t', dtype='<U32')
+            sample_list = np.loadtxt(sample_list_path, delimiter='\t', dtype='<U32')
         else:
             sample_list = self.A_df.columns
 
         self.A_df = self.A_df.loc[:, sample_list]
         self.B_df = self.B_df.loc[:, sample_list]
+        if self.param.split_B:
+            self.B_df, _ = self.separate_B(self.B_df)
         self.C_df = self.C_df.loc[:, sample_list]
 
         labels_path = os.path.join(self.param.data_dir, 'labels.tsv')
         self.labels = pd.read_csv(labels_path, sep='\t', header=0, index_col=0)
-        self.labels = self.labels.loc[:, sample_list]
+        self.labels = self.labels.loc[sample_list]
 
-        kf = StratifiedKFold(n_splits=self.param.num_folds, random_state=self.param.seed)
-        for i, (train_index, test_index) in enumerate(kf.split(self.A_df, self.labels)):
+        kf = StratifiedKFold(n_splits=self.param.num_folds, shuffle=True, random_state=self.param.seed)
+        for i, (train_index, test_index) in enumerate(kf.split(self.A_df.T, self.labels)):
             if i == self.current_fold:
                 self.train_index = train_index[:int(self.param.train_val_split * len(train_index))]
                 self.val_index = train_index[int(self.param.train_val_split * len(train_index)):]
@@ -53,6 +55,31 @@ class ABCDataModule(LightningDataModule):
         samples = np.load(samples_path, allow_pickle=True)
         df = pd.DataFrame(data=values, index=features, columns=samples)
         return df
+
+    def separate_B(self, B_df_single):
+        """
+        Separate the DNA methylation dataframe into subsets according to their targeting chromosomes
+
+        Parameters:
+            B_df_single(DataFrame) -- a dataframe that contains the single DNA methylation matrix
+
+        Return:
+            B_df_list(list) -- a list with 23 subset dataframe
+            B_dim(list) -- the dims of each chromosome
+        """
+        anno = pd.read_csv('./anno/B_anno.csv', dtype={'CHR': str}, index_col=0)
+        anno_contain = anno.loc[B_df_single.index, :]
+        print('Separating B according the targeting chromosome...')
+        B_df_list, B_dim_list = [], []
+        ch_id = list(range(1, 23))
+        ch_id.append('X')
+        for ch in ch_id:
+            ch_index = anno_contain[anno_contain.CHR == str(ch)].index
+            ch_df = B_df_single.loc[ch_index, :]
+            B_df_list.append(ch_df)
+            B_dim_list.append(len(ch_df))
+
+        return B_df_list, B_dim_list
 
     def setup(self, stage = None):
         if stage == "fit" or stage is None:

@@ -4,6 +4,7 @@ from torch.utils.data import Dataset
 import numpy as np
 import pandas as pd
 import os
+import torch
 
 class ABCDataset(Dataset):
     def __init__(self, param, A_df, B_df, C_df, labels, indices):
@@ -19,9 +20,12 @@ class ABCDataset(Dataset):
         return len(self.indices)
     
     def __getitem__(self, idx):
-        A_sample = self.A_df.iloc[:, self.indices[idx]]
-        B_sample = self.B_df.iloc[:, self.indices[idx]]
-        C_sample = self.C_df.iloc[:, self.indices[idx]]
-        label = self.labels.iloc[self.indices[idx]]
+        A_sample = torch.tensor(self.A_df.iloc[:, self.indices[idx]]).float()
+        if self.param.split_B:
+            B_sample = [torch.tensor(B_ch.iloc[:, self.indices[idx]]).float() for B_ch in self.B_df]
+        else:
+            B_sample = torch.tensor(self.B_df.iloc[:, self.indices[idx]]).float()
+        C_sample = torch.tensor(self.C_df.iloc[:, self.indices[idx]]).float()
+        label = torch.tensor(self.labels.iloc[self.indices[idx]]).float()
         return A_sample, B_sample, C_sample, label
         
