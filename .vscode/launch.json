@@ -22,7 +22,16 @@
                 "--auto_scale_batch_size", "binsearch",
                 "--auto_lr_find", "True",
                 "--gpus", "-1",
-                "--split_B"
+                "--split_B",
+                "--num_workers", "24",
+                "--pretraining_patience", "2",
+                "--downstream_patience", "2",
+                "--ae_dim_1B", "32",
+                "--ae_dim_2B", "64",
+                "--ae_dim_1A", "32",
+                "--ae_dim_2A", "64",
+                "--ae_dim_1C", "32",
+                "--ae_dim_2C", "64"
             ]
         }
     ]

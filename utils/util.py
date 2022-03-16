@@ -2,7 +2,7 @@ import argparse
 from pytorch_lightning import Trainer, seed_everything
 import torch
 import numpy as np
-from models.lit_models import AutoEncoder
+from models.lit_models import AutoEncoder, Classifier
 import pytorch_lightning.loggers as pl_loggers
 from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
 import os
@@ -31,8 +31,8 @@ def parse_arguments():
                             help='provide a subset sample list of the dataset, store in the path data_dir/sample_list.tsv, if False use all the samples')
     parser.add_argument('--batch_size', type=int, default=32,
                             help='data batch size')
-    parser.add_argument('--train_val_split', type=float, default=0.9,
-                            help='train/val split ratio')
+    parser.add_argument('--val_ratio', type=float, default=0.1,
+                            help='val proportion of total training data')
     parser.add_argument('--num_workers', type=int, default=0,
                             help='number of workers for data loading')
     parser.add_argument('--split_B', action='store_true',
@@ -45,7 +45,7 @@ def parse_arguments():
     parser.add_argument("--downstream_patience", type=int, default=10)
     
     parser = AutoEncoder.add_model_specific_args(parser)
-    # parser = Classifier.add_model_specific_args(parser)
+    parser = Classifier.add_model_specific_args(parser)
 
     # add all the available trainer options to argparse
     # ie: now --gpus --num_nodes ... --fast_dev_run all work in the cli
@@ -73,5 +73,13 @@ def define_callbacks_loggers_pretraining(param, count):
     csv_logger = pl_loggers.CSVLogger(checkpoint_path, name='pretraining')
     early_stopping = EarlyStopping('val_pretext_loss', patience=param.pretraining_patience)
     model_checkpoint = ModelCheckpoint(csv_logger.log_dir, monitor='val_pretext_loss', mode='min', save_top_k=1)
-    wandb_logger = pl_loggers.WandbLogger(project = 'tcga_contrastive', group = '{}-pretraining'.format(param.exp_name), name = 'fold-{}'.format(count), offline=True)
+    wandb_logger = pl_loggers.WandbLogger(project = 'tcga_contrastive', group = '{}-pretraining'.format(param.exp_name), name = 'fold-{}'.format(count), offline=False)
     return early_stopping, model_checkpoint, wandb_logger, csv_logger, checkpoint_path
+
+
+def define_callbacks_loggers_downstream(param, checkpoint_path, count):
+    csv_logger = pl_loggers.CSVLogger(checkpoint_path, name='downstream')
+    early_stopping = EarlyStopping('val_down_loss', patience=param.downstream_patience)
+    model_checkpoint = ModelCheckpoint(csv_logger.log_dir, monitor='val_accuracy', mode='max', save_top_k=1)
+    wandb_logger = pl_loggers.WandbLogger(project = 'tcga_contrastive', group = '{}-downstream'.format(param.exp_name), name = 'fold-{}'.format(count), offline=False)
+    return early_stopping, model_checkpoint, wandb_logger, csv_logger

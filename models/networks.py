@@ -253,3 +253,49 @@ class AENet(nn.Module):
 
     def forward(self, x):
         return self.encode(x)
+
+
+class ClassifierNet(nn.Module):
+    """
+    Defines a multi-layer fully-connected classifier
+    """
+    def __init__(self, class_num=2, latent_dim=128, norm_layer=nn.BatchNorm1d, leaky_slope=0.2, dropout_p=0,
+                 class_dim_1=128, class_dim_2=64, layer_num=3):
+        """
+        Construct a multi-layer fully-connected classifier
+        Parameters:
+            class_num (int)         -- the number of class
+            latent_dim (int)        -- the dimensionality of the latent space and the input layer of the classifier
+            norm_layer              -- normalization layer
+            leaky_slope (float)     -- the negative slope of the Leaky ReLU activation function
+            dropout_p (float)       -- probability of an element to be zeroed in a dropout layer
+            layer_num (int)         -- the layer number of the classifier, >=3
+        """
+        super(ClassifierNet, self).__init__()
+
+        self.input_fc = FCBlock(latent_dim, class_dim_1, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=dropout_p,
+                                activation=True)
+
+        # create a list to store fc blocks
+        mul_fc_block = []
+        # the block number of the multi-layer fully-connected block should be at least 3
+        block_layer_num = max(layer_num, 3)
+        input_dim = class_dim_1
+        dropout_flag = True
+        for num in range(0, block_layer_num-2):
+            mul_fc_block += [FCBlock(input_dim, class_dim_2, norm_layer=norm_layer, leaky_slope=leaky_slope,
+                                    dropout_p=dropout_flag*dropout_p, activation=True)]
+            input_dim = class_dim_2
+            # dropout for every other layer
+            dropout_flag = not dropout_flag
+        self.mul_fc = nn.Sequential(*mul_fc_block)
+
+        # the output fully-connected layer of the classifier
+        self.output_fc = FCBlock(class_dim_2, class_num, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=0,
+                                 activation=False, normalization=False)
+
+    def forward(self, x):
+        x1 = self.input_fc(x)
+        x2 = self.mul_fc(x1)
+        y = self.output_fc(x2)
+        return y

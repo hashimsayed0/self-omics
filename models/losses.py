@@ -46,3 +46,10 @@ class SimCLR_Loss(nn.Module):
         loss /= N
         
         return loss
+
+
+def weighted_binary_cross_entropy(input, target, weights=None):
+
+    input = torch.clamp(input,min=1e-7,max=1-1e-7)
+    bce = - weights[1] * target * torch.log(input) - (1 - target) * weights[0] * torch.log(1 - input)
+    return torch.mean(bce)
