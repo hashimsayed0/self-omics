@@ -15,7 +15,7 @@ def parse_arguments():
                             help='models, settings and intermediate results are saved in folder in this directory')
     parser.add_argument('--seed', type=int, default=42,
                             help='random seed')
-    parser.add_argument("--one_fold", action="store_true",
+    parser.add_argument("--one_fold", default=False, type=lambda x: (str(x).lower() == 'true'), 
                             help="to use only one fold for training, by default k-fold cross validation is done")
     parser.add_argument("--fold_idx", type=int, default=0, 
                             help="if one_fold is set to True, this is the fold_idx number")
@@ -25,24 +25,24 @@ def parse_arguments():
                             help="weight of class 0 in the loss function")
 
     # data arguments
-    parser.add_argument("--data_dir", type=str, default="data/ABC_inter",
+    parser.add_argument("--data_dir", type=str, default="./data/ABC_inter/Normalized",
                             help="directory containing the dataset")
-    parser.add_argument('--use_sample_list', action='store_true',
+    parser.add_argument('--use_sample_list', default=False, type=lambda x: (str(x).lower() == 'true'),
                             help='provide a subset sample list of the dataset, store in the path data_dir/sample_list.tsv, if False use all the samples')
     parser.add_argument('--batch_size', type=int, default=32,
                             help='data batch size')
-    parser.add_argument('--val_ratio', type=float, default=0.1,
+    parser.add_argument('--val_ratio', type=float, default=0.15,
                             help='val proportion of total training data')
     parser.add_argument('--num_workers', type=int, default=0,
                             help='number of workers for data loading')
-    parser.add_argument('--split_B', action='store_true',
+    parser.add_argument('--split_B', default=False, type=lambda x: (str(x).lower() == 'true'),
                             help='if True, B is split into 23 parts corresponding to the 23 different chromosomes')
     
     
     # trainer related arguments
     parser.add_argument("--exp_name", type=str, default="test")
-    parser.add_argument("--pretraining_patience", type=int, default=10)
-    parser.add_argument("--downstream_patience", type=int, default=10)
+    parser.add_argument("--pretraining_patience", type=int, default=5)
+    parser.add_argument("--downstream_patience", type=int, default=5)
     
     parser = AutoEncoder.add_model_specific_args(parser)
     parser = Classifier.add_model_specific_args(parser)
@@ -68,18 +68,17 @@ def compute_input_shapes(abc_dm):
     C_shape = abc_dm.C_df.shape[0]
     return A_shape, B_shape, C_shape
 
-def define_callbacks_loggers_pretraining(param, count):
-    checkpoint_path = os.path.join(param.checkpoints_dir, param.exp_name, 'fold-{}'.format(count))
+def define_callbacks_loggers_pretraining(param, checkpoint_path, count):
     csv_logger = pl_loggers.CSVLogger(checkpoint_path, name='pretraining')
     early_stopping = EarlyStopping('val_pretext_loss', patience=param.pretraining_patience)
     model_checkpoint = ModelCheckpoint(csv_logger.log_dir, monitor='val_pretext_loss', mode='min', save_top_k=1)
-    wandb_logger = pl_loggers.WandbLogger(project = 'tcga_contrastive', group = '{}-pretraining'.format(param.exp_name), name = 'fold-{}'.format(count), offline=False)
-    return early_stopping, model_checkpoint, wandb_logger, csv_logger, checkpoint_path
+    wandb_logger = pl_loggers.WandbLogger(project = 'tcga_contrastive', group = '{}-pretraining'.format(param.exp_name), name = 'fold-{f}-v{v}'.format(f=count, v=csv_logger.version), offline=False)
+    return early_stopping, model_checkpoint, wandb_logger, csv_logger
 
 
 def define_callbacks_loggers_downstream(param, checkpoint_path, count):
     csv_logger = pl_loggers.CSVLogger(checkpoint_path, name='downstream')
     early_stopping = EarlyStopping('val_down_loss', patience=param.downstream_patience)
     model_checkpoint = ModelCheckpoint(csv_logger.log_dir, monitor='val_accuracy', mode='max', save_top_k=1)
-    wandb_logger = pl_loggers.WandbLogger(project = 'tcga_contrastive', group = '{}-downstream'.format(param.exp_name), name = 'fold-{}'.format(count), offline=False)
+    wandb_logger = pl_loggers.WandbLogger(project = 'tcga_contrastive', group = '{}-downstream'.format(param.exp_name), name = 'fold-{f}-v{v}'.format(f=count, v=csv_logger.version), offline=False)
     return early_stopping, model_checkpoint, wandb_logger, csv_logger

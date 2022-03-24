@@ -64,14 +64,14 @@ class LinearLayer(nn.Module):
         return x
 
 
-class ProjectionHead(nn.Module):
+class SimCLRProjectionHead(nn.Module):
     def __init__(self,
                  in_features,
                  hidden_features,
                  out_features,
                  head_type = 'nonlinear',
                  **kwargs):
-        super(ProjectionHead,self).__init__(**kwargs)
+        super(SimCLRProjectionHead,self).__init__(**kwargs)
         self.in_features = in_features
         self.out_features = out_features
         self.hidden_features = hidden_features
@@ -89,6 +89,29 @@ class ProjectionHead(nn.Module):
         x = self.layers(x)
         return x
 
+class CLIPProjectionHead(nn.Module):
+    def __init__(
+        self,
+        embedding_dim,
+        projection_dim,
+        dropout
+    ):
+        super().__init__()
+        self.projection = nn.Linear(embedding_dim, projection_dim)
+        self.gelu = nn.GELU()
+        self.fc = nn.Linear(projection_dim, projection_dim)
+        self.dropout = nn.Dropout(dropout)
+        self.layer_norm = nn.LayerNorm(projection_dim)
+    
+    def forward(self, x):
+        projected = self.projection(x)
+        x = self.gelu(projected)
+        x = self.fc(x)
+        x = self.dropout(x)
+        x = x + projected
+        x = self.layer_norm(x)
+        return x
+    
     
 class FCBlock(nn.Module):
     """
@@ -141,7 +164,7 @@ class AENet(nn.Module):
         DNA methylation input separated by chromosome
     """
     def __init__(self, input_sizes, latent_size, split_B, norm_layer=nn.BatchNorm1d, leaky_slope=0.2, dropout_p=0, dim_1B=128, dim_2B=1024,
-                 dim_1A=2048, dim_2A=1024, dim_1C=1024, dim_2C=1024, dim_3=512):
+                 dim_1A=2048, dim_2A=1024, dim_1C=1024, dim_2C=1024):
         """
             Construct a fully-connected variational autoencoder
             Parameters:

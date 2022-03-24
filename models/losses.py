@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import numpy as np
+import torch.nn.functional as F
 
 
 class SimCLR_Loss(nn.Module):
@@ -47,9 +48,38 @@ class SimCLR_Loss(nn.Module):
         
         return loss
 
+class CLIPLoss(nn.Module):
+    def __init__(
+        self,
+        temperature
+    ):
+        super().__init__()
+        self.temperature = temperature
+
+    def forward(self, z_i, z_j):
+
+        # Calculating the Loss
+        logits = (z_j @ z_i.T) / self.temperature
+        z_i_similarity = z_i @ z_i.T
+        z_j_similarity = z_j @ z_j.T
+        targets = F.softmax(
+            (z_i_similarity + z_j_similarity) / 2 * self.temperature, dim=-1
+        )
+        z_j_loss = cross_entropy(logits, targets, reduction='none')
+        z_i_loss = cross_entropy(logits.T, targets.T, reduction='none')
+        loss =  (z_i_loss + z_j_loss) / 2.0 # shape: (batch_size)
+        return loss.mean()
 
 def weighted_binary_cross_entropy(input, target, weights=None):
 
     input = torch.clamp(input,min=1e-7,max=1-1e-7)
     bce = - weights[1] * target * torch.log(input) - (1 - target) * weights[0] * torch.log(1 - input)
     return torch.mean(bce)
+
+def cross_entropy(preds, targets, reduction='none'):
+        log_softmax = nn.LogSoftmax(dim=-1)
+        loss = (-targets * log_softmax(preds)).sum(1)
+        if reduction == "none":
+            return loss
+        elif reduction == "mean":
+            return loss.mean()

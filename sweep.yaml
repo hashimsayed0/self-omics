@@ -1,0 +1,58 @@
+name: cliploss_hyperopt 
+program: train.py
+method: random
+parameters:
+  use_sample_list:
+    value: "True"
+  auto_scale_batch_size:
+    values:
+      - "binsearch"
+  auto_lr_find:
+    value: "True"
+  gpus:
+    values:
+      - "-1"
+  ae_dim_1B:
+    values:
+      - "128"
+  ae_dim_2B:
+    values:
+      - "1024"
+  ae_dim_1A:
+    values:
+      - "2048"
+  ae_dim_2A:
+    values:
+      - "1024"
+  ae_dim_1C:
+    values:
+      - "1024"
+  ae_dim_2C:
+    values:
+      - "1024"
+  exp_name:
+    values:
+      - "006"
+  one_fold:
+    value: "True"
+  split_B:
+    values:
+      - "True"
+  latent_size:
+    values:
+      - "512"
+      - "1024"
+  cont_loss_temp:
+    values:
+      - "0.5"
+      - "0.1"
+      - "1.0"
+  batch_size:
+    values:
+      - "512"
+  cont_loss:
+    values:
+      - "clip"
+  cont_loss_weight:
+    values:
+      - "0.02"

@@ -1,10 +1,12 @@
+from aiohttp import worker
 from pytorch_lightning import LightningDataModule
 import os
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import StratifiedKFold, StratifiedShuffleSplit
+from sklearn.model_selection import StratifiedKFold, StratifiedShuffleSplit, train_test_split
 from .datasets import ABCDataset
 from torch.utils.data import DataLoader
+from sklearn.utils import class_weight
 
 class ABCDataModule(LightningDataModule):
     def __init__(self, param, current_fold):
@@ -38,20 +40,19 @@ class ABCDataModule(LightningDataModule):
         kf = StratifiedKFold(n_splits=self.param.num_folds, shuffle=True, random_state=self.param.seed)
         for i, (train_index, test_index) in enumerate(kf.split(self.A_df.T, self.labels)):
             if i == self.current_fold:
-                val_sp = StratifiedKFold(n_splits=int(1/self.param.val_ratio), shuffle=True, random_state=self.param.seed)
-                iter = val_sp.split(self.A_df.iloc[:,train_index].T, self.labels.iloc[train_index])
-                self.train_index, self.val_index = next(iter)
+                self.train_index, self.val_index = train_test_split(train_index, test_size=self.param.val_ratio, random_state=self.param.seed, stratify=self.labels.iloc[train_index])
                 # self.train_index = train_index[:int(self.param.train_val_split * len(train_index))]
                 # self.val_index = train_index[int(self.param.train_val_split * len(train_index)):]
                 self.test_index = test_index
                 break
         
         self.class_weights = self.calculate_class_weights(self.labels.iloc[self.train_index].values)
+        self.labels = pd.get_dummies(self.labels.iloc[:,0])
     
     def calculate_class_weights(self, y_train):
-        class_counts = np.bincount(y_train.astype(int)[:,0])
-        class_weights = class_counts / class_counts.sum()
-        return 1 / class_weights
+        y_train = y_train.astype(int)[:,0]
+        class_weights = class_weight.compute_class_weight('balanced', classes=np.unique(y_train), y=y_train)
+        return class_weights
         
     def load_file(self, file_name):
         file_path = os.path.join(self.param.data_dir, file_name + '.npy')
@@ -79,7 +80,7 @@ class ABCDataModule(LightningDataModule):
         """
         anno = pd.read_csv('./anno/B_anno.csv', dtype={'CHR': str}, index_col=0)
         anno_contain = anno.loc[B_df_single.index, :]
-        print('Separating B according the targeting chromosome...')
+        print('Separating B according to the targeting chromosome...')
         B_df_list, B_dim_list = [], []
         ch_id = list(range(1, 23))
         ch_id.append('X')
@@ -100,10 +101,10 @@ class ABCDataModule(LightningDataModule):
             self.testset = ABCDataset(self.param, self.A_df, self.B_df, self.C_df, self.labels, self.test_index)
     
     def train_dataloader(self):
-        return DataLoader(self.trainset, batch_size=self.param.batch_size, num_workers=self.param.num_workers, drop_last=True)
+        return DataLoader(self.trainset, batch_size=self.param.batch_size, num_workers=self.param.num_workers)
     
     def val_dataloader(self):
-        return DataLoader(self.valset, batch_size=self.param.batch_size, num_workers=self.param.num_workers, drop_last=True)
+        return DataLoader(self.valset, batch_size=self.param.batch_size, num_workers=self.param.num_workers)
     
     def test_dataloader(self):
-        return DataLoader(self.testset, batch_size=self.param.batch_size, num_workers=self.param.num_workers, drop_last=True)
+        return DataLoader(self.testset, batch_size=self.param.batch_size, num_workers=self.param.num_workers)
