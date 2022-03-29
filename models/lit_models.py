@@ -28,7 +28,7 @@ class AutoEncoder(pl.LightningModule):
             self.cont_criterion = SimCLR_Loss(batch_size = batch_size, temperature = cont_loss_temp)
         elif cont_loss == "clip":
             self.projector = CLIPProjectionHead(latent_size, projection_size, ae_drop_p)
-            self.cont_criterion = CLIPLoss(temperature = cont_loss_temp)
+            self.cont_criterion = CLIPLoss(temperature = cont_loss_temp, latent_size = latent_size, proj_size = projection_size)
         self.save_hyperparameters()
 
     @staticmethod
@@ -68,11 +68,22 @@ class AutoEncoder(pl.LightningModule):
             x_B_recon_loss.append(F.mse_loss(x_B_recon[i], x_B[i]))
         recon_loss = F.mse_loss(x_A_recon, x_A) + sum(x_B_recon_loss) + F.mse_loss(x_C_recon, x_C)
         self.log("train_recon_loss", recon_loss, on_step=True, on_epoch=True)
-        z_A = self.projector(h_A)
-        z_B = self.projector(h_B)
-        z_C = self.projector(h_C)
-        cont_loss = self.cont_criterion(z_A, z_B) + self.cont_criterion(z_B, z_C) + self.cont_criterion(z_C, z_A)
+        # z_A = self.projector(h_A)
+        # z_B = self.projector(h_B)
+        # z_C = self.projector(h_C)
+        # cont_loss = self.cont_criterion(z_A, z_B) + self.cont_criterion(z_B, z_C) + self.cont_criterion(z_C, z_A)
+
+        loss_A_B, loss_A1, loss_B1 = self.cont_criterion(h_A, h_B)
+        loss_B_C, loss_B2, loss_C1 = self.cont_criterion(h_B, h_C)
+        loss_C_A, loss_C2, loss_A2 = self.cont_criterion(h_C, h_A)
+        cont_loss = (loss_A_B + loss_B_C + loss_C_A) / 3
+        loss_A = (loss_A1 + loss_A2) / 2
+        loss_B = (loss_B1 + loss_B2) / 2
+        loss_C = (loss_C1 + loss_C2) / 2
         pretext_loss = recon_loss + self.cont_loss_weight * cont_loss
+        self.log("train_cont_loss_A", loss_A, on_step=True, on_epoch=True)
+        self.log("train_cont_loss_B", loss_B, on_step=True, on_epoch=True)
+        self.log("train_cont_loss_C", loss_C, on_step=True, on_epoch=True)
         self.log("train_cont_loss", cont_loss, on_step=True, on_epoch=True)
         self.log("train_pretext_loss", pretext_loss, on_step=True, on_epoch=True)
         return pretext_loss
@@ -87,22 +98,39 @@ class AutoEncoder(pl.LightningModule):
         for i in range(len(x_B)):
             x_B_recon_loss.append(F.mse_loss(x_B_recon[i], x_B[i]))
         recon_loss = F.mse_loss(x_A_recon, x_A) + sum(x_B_recon_loss) + F.mse_loss(x_C_recon, x_C)
-        z_A = self.projector(h_A)
-        z_B = self.projector(h_B)
-        z_C = self.projector(h_C)
-        cont_loss = self.cont_criterion(z_A, z_B) + self.cont_criterion(z_B, z_C) + self.cont_criterion(z_C, z_A)
+        # z_A = self.projector(h_A)
+        # z_B = self.projector(h_B)
+        # z_C = self.projector(h_C)
+        # cont_loss = self.cont_criterion(z_A, z_B) + self.cont_criterion(z_B, z_C) + self.cont_criterion(z_C, z_A)
+
+        loss_A_B, loss_A1, loss_B1 = self.cont_criterion(h_A, h_B)
+        loss_B_C, loss_B2, loss_C1 = self.cont_criterion(h_B, h_C)
+        loss_C_A, loss_C2, loss_A2 = self.cont_criterion(h_C, h_A)
+        cont_loss = (loss_A_B + loss_B_C + loss_C_A) / 3
+        loss_A = (loss_A1 + loss_A2) / 2
+        loss_B = (loss_B1 + loss_B2) / 2
+        loss_C = (loss_C1 + loss_C2) / 2
         pretext_loss = recon_loss + self.cont_loss_weight * cont_loss
         return {
             'val_recon_loss': recon_loss,
+            'val_cont_loss_A': loss_A,
+            'val_cont_loss_B': loss_B,
+            'val_cont_loss_C': loss_C,
             "val_cont_loss": cont_loss,
             "val_pretext_loss": pretext_loss
         }
 
     def validation_epoch_end(self, outputs):
         avg_recon_loss = torch.stack([x["val_recon_loss"] for x in outputs]).mean()
+        avg_cont_loss_A = torch.stack([x["val_cont_loss_A"] for x in outputs]).mean()
+        avg_cont_loss_B = torch.stack([x["val_cont_loss_B"] for x in outputs]).mean()
+        avg_cont_loss_C = torch.stack([x["val_cont_loss_C"] for x in outputs]).mean()
         avg_cont_loss = torch.stack([x["val_cont_loss"] for x in outputs]).mean()
         avg_pretext_loss = torch.stack([x["val_pretext_loss"] for x in outputs]).mean()
         self.log("val_recon_loss", avg_recon_loss)
+        self.log("val_cont_loss_A", avg_cont_loss_A)
+        self.log("val_cont_loss_B", avg_cont_loss_B)
+        self.log("val_cont_loss_C", avg_cont_loss_C)
         self.log("val_cont_loss", avg_cont_loss)
         self.log("val_pretext_loss", avg_pretext_loss)
     

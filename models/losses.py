@@ -1,3 +1,4 @@
+from matplotlib import axis
 import torch
 import torch.nn as nn
 import numpy as np
@@ -48,27 +49,52 @@ class SimCLR_Loss(nn.Module):
         
         return loss
 
+# class CLIPLoss(nn.Module):
+#     def __init__(
+#         self,
+#         temperature
+#     ):
+#         super().__init__()
+#         self.temperature = temperature
+
+#     def forward(self, z_i, z_j):
+
+#         # Calculating the Loss
+#         logits = (z_j @ z_i.T) / self.temperature
+#         z_i_similarity = z_i @ z_i.T
+#         z_j_similarity = z_j @ z_j.T
+#         targets = F.softmax(
+#             (z_i_similarity + z_j_similarity) / 2 * self.temperature, dim=-1
+#         )
+#         z_j_loss = cross_entropy(logits, targets, reduction='none')
+#         z_i_loss = cross_entropy(logits.T, targets.T, reduction='none')
+#         loss =  (z_i_loss + z_j_loss) / 2.0 # shape: (batch_size)
+#         return loss.mean()
+
+
 class CLIPLoss(nn.Module):
-    def __init__(
-        self,
-        temperature
-    ):
+    def __init__(self, temperature, latent_size, proj_size):
         super().__init__()
         self.temperature = temperature
-
+        self.W_i = nn.Parameter(torch.randn(latent_size, proj_size))
+        self.W_j = nn.Parameter(torch.randn(latent_size, proj_size))
+        self.ce = nn.CrossEntropyLoss(reduction='none')
+    
     def forward(self, z_i, z_j):
+        z_i_proj_norm = torch.norm(z_i @ self.W_i, dim=1)
+        z_j_proj_norm = torch.norm(z_j @ self.W_j, dim=1)
 
-        # Calculating the Loss
-        logits = (z_j @ z_i.T) / self.temperature
-        z_i_similarity = z_i @ z_i.T
-        z_j_similarity = z_j @ z_j.T
-        targets = F.softmax(
-            (z_i_similarity + z_j_similarity) / 2 * self.temperature, dim=-1
-        )
-        z_j_loss = cross_entropy(logits, targets, reduction='none')
-        z_i_loss = cross_entropy(logits.T, targets.T, reduction='none')
-        loss =  (z_i_loss + z_j_loss) / 2.0 # shape: (batch_size)
-        return loss.mean()
+        logits = (z_i_proj_norm @ z_j_proj_norm.T) / torch.exp(self.temperature)
+
+        labels = torch.arange(logits.shape[0])
+        loss_i = self.ce(logits, labels, axis=0)
+        loss_j = self.ce(logits, labels, axis=1)
+        loss = (loss_i + loss_j) / 2.0
+
+        return loss.mean(), loss_i.mean(), loss_j.mean()
+        
+        
+
 
 def weighted_binary_cross_entropy(input, target, weights=None):
 
