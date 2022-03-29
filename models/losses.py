@@ -75,20 +75,22 @@ class SimCLR_Loss(nn.Module):
 class CLIPLoss(nn.Module):
     def __init__(self, temperature, latent_size, proj_size):
         super().__init__()
-        self.temperature = temperature
+        self.temperature = nn.Parameter(torch.tensor(temperature))
         self.W_i = nn.Parameter(torch.randn(latent_size, proj_size))
         self.W_j = nn.Parameter(torch.randn(latent_size, proj_size))
         self.ce = nn.CrossEntropyLoss(reduction='none')
     
     def forward(self, z_i, z_j):
-        z_i_proj_norm = torch.norm(z_i @ self.W_i, dim=1)
-        z_j_proj_norm = torch.norm(z_j @ self.W_j, dim=1)
+        z_i_proj = z_i @ self.W_i
+        z_i_proj_norm = z_i_proj / torch.norm(z_i_proj, dim=1).unsqueeze(1)
+        z_j_proj = z_j @ self.W_j
+        z_j_proj_norm = z_j_proj / torch.norm(z_j_proj, dim=1).unsqueeze(1)
 
-        logits = (z_i_proj_norm @ z_j_proj_norm.T) / torch.exp(self.temperature)
+        logits = (z_i_proj_norm @ z_j_proj_norm.T) * torch.exp(self.temperature)
 
-        labels = torch.arange(logits.shape[0])
-        loss_i = self.ce(logits, labels, axis=0)
-        loss_j = self.ce(logits, labels, axis=1)
+        labels = torch.arange(logits.shape[0]).to(logits.device).long()
+        loss_i = self.ce(logits, labels)
+        loss_j = self.ce(logits.T, labels)
         loss = (loss_i + loss_j) / 2.0
 
         return loss.mean(), loss_i.mean(), loss_j.mean()

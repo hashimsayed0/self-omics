@@ -42,7 +42,7 @@ class AutoEncoder(pl.LightningModule):
         parser.add_argument("--ae_drop_p", type=float, default=0.2)
         parser.add_argument("--cont_loss", type=str, default="simclr", help="contrastive loss to use, options: simclr, clip")
         parser.add_argument("--cont_loss_temp", type=float, default=0.5)
-        parser.add_argument("--cont_loss_weight", type=float, default=0.01)
+        parser.add_argument("--cont_loss_weight", type=float, default=0.2)
         parser.add_argument("--ae_dim_1B", type=int, default=16)
         parser.add_argument("--ae_dim_2B", type=int, default=32)
         parser.add_argument("--ae_dim_1A", type=int, default=32)
