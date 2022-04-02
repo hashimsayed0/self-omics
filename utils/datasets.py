@@ -1,3 +1,4 @@
+from posixpath import split
 from matplotlib.pyplot import cla
 from sklearn.model_selection import StratifiedKFold
 from torch.utils.data import Dataset
@@ -7,16 +8,16 @@ import os
 import torch
 
 class ABCDataset(Dataset):
-    def __init__(self, param, A_df, B_df, C_df, labels, indices):
+    def __init__(self, A_df, B_df, C_df, labels, indices, split_B):
         super().__init__()
-        self.param = param
-        self.A_tensors = torch.tensor(A_df.values).float()
-        if param.split_B:
-            self.B_tensors = [torch.tensor(B_ch.values).float() for B_ch in B_df]
+        self.split_B = split_B
+        self.A_tensors = torch.tensor(A_df.values.astype(float)).float()
+        if self.split_B:
+            self.B_tensors = [torch.tensor(B_ch.values.astype(float)).float() for B_ch in B_df]
         else:
-            self.B_tensors = torch.tensor(B_df.values).float()
-        self.C_tensors = torch.tensor(C_df.values).float()
-        self.label_tensors = torch.tensor(labels.values).float()
+            self.B_tensors = torch.tensor(B_df.values.astype(float)).float()
+        self.C_tensors = torch.tensor(C_df.values.astype(float)).float()
+        self.label_tensors = torch.tensor(labels.values.astype(float)).float()
 
         # self.A_df = A_df
         # self.B_df = B_df
@@ -29,7 +30,7 @@ class ABCDataset(Dataset):
     
     def __getitem__(self, idx):
         # A_sample = torch.tensor(self.A_df.iloc[:, self.indices[idx]]).float()
-        # if self.param.split_B:
+        # if sel.split_B:
         #     B_sample = [torch.tensor(B_ch.iloc[:, self.indices[idx]]).float() for B_ch in self.B_df]
         # else:
         #     B_sample = torch.tensor(self.B_df.iloc[:, self.indices[idx]]).float()
@@ -37,7 +38,7 @@ class ABCDataset(Dataset):
         # label = torch.tensor(self.labels.iloc[self.indices[idx], :]).float()
 
         A_sample = self.A_tensors[:, idx]
-        if self.param.split_B:
+        if self.split_B:
             B_sample = [self.B_tensors[ch][:, idx] for ch in range(len(self.B_tensors))]
         else:
             B_sample = self.B_tensors[:, idx]

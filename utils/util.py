@@ -6,6 +6,7 @@ from models.lit_models import AutoEncoder, Classifier
 import pytorch_lightning.loggers as pl_loggers
 from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
 import os
+from .datamodules import ABCDataModule
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Runs the specified command')
@@ -22,28 +23,14 @@ def parse_arguments():
     parser.add_argument("--num_folds", type=int, default=5, 
                             help="number of folds for k-fold cross validation if one_fold is set to False")
     parser.add_argument("--class_0_weight", type=float, default=0.5, 
-                            help="weight of class 0 in the loss function")
-
-    # data arguments
-    parser.add_argument("--data_dir", type=str, default="./data/ABC_inter/Normalized",
-                            help="directory containing the dataset")
-    parser.add_argument('--use_sample_list', default=False, type=lambda x: (str(x).lower() == 'true'),
-                            help='provide a subset sample list of the dataset, store in the path data_dir/sample_list.tsv, if False use all the samples')
-    parser.add_argument('--batch_size', type=int, default=32,
-                            help='data batch size')
-    parser.add_argument('--val_ratio', type=float, default=0.15,
-                            help='val proportion of total training data')
-    parser.add_argument('--num_workers', type=int, default=0,
-                            help='number of workers for data loading')
-    parser.add_argument('--split_B', default=False, type=lambda x: (str(x).lower() == 'true'),
-                            help='if True, B is split into 23 parts corresponding to the 23 different chromosomes')
-    
+                            help="weight of class 0 in the loss function")    
     
     # trainer related arguments
     parser.add_argument("--exp_name", type=str, default="test")
     parser.add_argument("--pretraining_patience", type=int, default=5)
     parser.add_argument("--downstream_patience", type=int, default=5)
     
+    parser = ABCDataModule.add_data_module_args(parser)
     parser = AutoEncoder.add_model_specific_args(parser)
     parser = Classifier.add_model_specific_args(parser)
 

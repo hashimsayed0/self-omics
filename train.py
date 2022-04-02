@@ -18,8 +18,8 @@ for fold in range(param.num_folds):
         if param.fold_idx != fold:
             continue
     
-    abc_dm = datamodules.ABCDataModule(param, fold)
     dict_args = vars(param)
+    abc_dm = datamodules.ABCDataModule(fold, **dict_args)
     checkpoint_path = os.path.join(param.checkpoints_dir, param.exp_name, 'fold-{}'.format(fold))
 
     if param.load_pretrained_ae:

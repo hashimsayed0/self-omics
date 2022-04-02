@@ -3,10 +3,11 @@ import torch
 import torch.nn as nn
 import numpy as np
 import torch.nn.functional as F
+from .networks import SimCLRProjectionHead
 
 
 class SimCLR_Loss(nn.Module):
-    def __init__(self, batch_size, temperature):
+    def __init__(self, batch_size, temperature, latent_size, proj_size):
         super().__init__()
         self.batch_size = batch_size
         self.temperature = temperature
@@ -14,6 +15,7 @@ class SimCLR_Loss(nn.Module):
         self.mask = self.mask_correlated_samples(batch_size)
         self.criterion = nn.CrossEntropyLoss(reduction="sum")
         self.similarity_f = nn.CosineSimilarity(dim=2)
+        self.projector = SimCLRProjectionHead(latent_size, latent_size, proj_size)
 
     def mask_correlated_samples(self, batch_size):
         N = 2 * batch_size
@@ -25,7 +27,9 @@ class SimCLR_Loss(nn.Module):
             mask[batch_size + i, i] = 0
         return mask
 
-    def forward(self, z_i, z_j):
+    def forward(self, h_i, h_j):
+        z_i = self.projector(h_i)
+        z_j = self.projector(h_j)
 
         N = 2 * self.batch_size
 
@@ -95,8 +99,33 @@ class CLIPLoss(nn.Module):
 
         return loss.mean(), loss_i.mean(), loss_j.mean()
         
-        
 
+class BarlowTwinsLoss(nn.Module):
+    def __init__(self, lambd, latent_size, proj_size):
+        super().__init__()
+        self.lambd = lambd
+        self.bn = nn.BatchNorm1d(proj_size, affine=False)
+        self.projector = SimCLRProjectionHead(latent_size, latent_size // 2, proj_size)
+
+    def forward(self, y1, y2):
+        n = y1.shape[0]
+        z1 = self.projector(y1)
+        z2 = self.projector(y2)
+
+        # empirical cross-correlation matrix
+        c = self.bn(z1).T @ self.bn(z2) / n
+
+        on_diag = torch.diagonal(c).add_(-1).pow_(2).sum()
+        off_diag = off_diagonal(c).pow_(2).sum()
+        loss = on_diag + self.lambd * off_diag
+        return loss, on_diag, self.lambd * off_diag
+
+
+def off_diagonal(x):
+    # return a flattened view of the off-diagonal elements of a square matrix
+    n, m = x.shape
+    assert n == m
+    return x.flatten()[:-1].view(n - 1, n + 1)[:, 1:].flatten()
 
 def weighted_binary_cross_entropy(input, target, weights=None):
 
