@@ -14,12 +14,13 @@ import wandb
 import numpy as np
 
 class AutoEncoder(pl.LightningModule):
-    def __init__(self, input_size_A, input_size_B, input_size_C, ae_net, latent_size, projection_size, ae_lr, ae_weight_decay, ae_momentum, ae_drop_p, cont_loss, cont_loss_temp, cont_loss_lambda, ae_optimizer, ae_use_lrscheduler, cont_loss_weight, split_B, mask_B, num_mask_B, masking_method, batch_size, ae_dim_1B, ae_dim_2B, ae_dim_1A, ae_dim_2A, ae_dim_1C, ae_dim_2C, **config):
+    def __init__(self, input_size_A, input_size_B, input_size_C, ae_net, ae_weight_kl, latent_size, projection_size, ae_lr, ae_weight_decay, ae_momentum, ae_drop_p, cont_loss, cont_loss_temp, cont_loss_lambda, ae_optimizer, ae_use_lrscheduler, cont_loss_weight, split_B, mask_B, num_mask_B, masking_method, batch_size, ae_dim_1B, ae_dim_2B, ae_dim_1A, ae_dim_2A, ae_dim_1C, ae_dim_2C, **config):
         super(AutoEncoder, self).__init__()
         self.input_size_A = input_size_A
         self.input_size_B = input_size_B
         self.input_size_C = input_size_C
         self.ae_net = ae_net
+        self.ae_weight_kl = ae_weight_kl
         self.latent_size = latent_size
         self.ae_lr = ae_lr
         self.ae_weight_decay = ae_weight_decay
@@ -60,8 +61,10 @@ class AutoEncoder(pl.LightningModule):
     @staticmethod
     def add_model_specific_args(parent_parser):
         parser = parent_parser.add_argument_group("AutoEncoder")
-        parser.add_argument("--ae_net", type=str, default="ae",
+        parser.add_argument("--ae_net", type=str, default="vae",
                             help="AutoEncoder network architecture, options: [ae, vae]")
+        parser.add_argument("--ae_weight_kl", type=float, default=0.01,
+                            help="Weight for KL loss if vae is used")
         parser.add_argument("--latent_size", type=int, default=512)
         parser.add_argument("--projection_size", type=int, default=256)
         parser.add_argument("--ae_lr", type=float, default=1e-3)
@@ -91,7 +94,10 @@ class AutoEncoder(pl.LightningModule):
         return parent_parser
 
     def forward(self, x):
-        return self.net.encode(x)
+        if self.ae_net == "vae":
+            return self.net(x)
+        elif self.ae_net == "ae":
+            return self.net.encode(x)
 
     def configure_optimizers(self):
         if self.ae_optimizer == "adam":
@@ -126,15 +132,15 @@ class AutoEncoder(pl.LightningModule):
                         if self.masking_method == 'zero':
                             x_B_masked[-1] = torch.zeros_like(x_B_masked[-1])
                         elif self.masking_method == 'noise':
-                            x_B_masked[-1] = x_B_masked[-1] + torch.rand_like(x_B_masked[-1])
+                            x_B_masked[-1] = x_B_masked[-1] + torch.randn_like(x_B_masked[-1])
 
             z, recon_x, mean, log_var = self.net((x_A, x_B_masked, x_C))
             x_B_recon_loss = []
             for i in range(len(x_B_masked)):
-                x_B_recon_loss.append(F.mse_loss(recon_x[1][i], x_B_masked[i]))
-            recon_loss_all = F.mse_loss(recon_x[0], x_A) + sum(x_B_recon_loss) / 23 + F.mse_loss(recon_x[2], x_C)
+                x_B_recon_loss.append(F.mse_loss(recon_x[1][i], x_B[i]))
+            recon_loss_all = F.mse_loss(recon_x[0], x_A) + sum(x_B_recon_loss) + F.mse_loss(recon_x[2], x_C)
             kl_loss = -0.5 * torch.sum(1 + log_var - mean.pow(2) - log_var.exp())
-            recon_loss = sum(x_B_recon_loss) / 23 + kl_loss
+            recon_loss = sum(x_B_recon_loss)  + self.ae_weight_kl * kl_loss
             self.log("train_recon_all_loss", recon_loss_all, on_step=False, on_epoch=True)
             self.log("train_kl_loss", kl_loss, on_step=False, on_epoch=True)
             self.log("train_recon_B_kl_loss", recon_loss, on_step=False, on_epoch=True)
@@ -212,15 +218,15 @@ class AutoEncoder(pl.LightningModule):
                         if self.masking_method == 'zero':
                             x_B_masked[-1] = torch.zeros_like(x_B_masked[-1])
                         elif self.masking_method == 'noise':
-                            x_B_masked[-1] = x_B_masked[-1] + torch.rand_like(x_B_masked[-1])
+                            x_B_masked[-1] = x_B_masked[-1] + torch.randn_like(x_B_masked[-1])
 
             z, recon_x, mean, log_var = self.net((x_A, x_B_masked, x_C))
             x_B_recon_loss = []
             for i in range(len(x_B_masked)):
-                x_B_recon_loss.append(F.mse_loss(recon_x[1][i], x_B_masked[i]))
-            recon_loss_all = F.mse_loss(recon_x[0], x_A) + sum(x_B_recon_loss) / 23 + F.mse_loss(recon_x[2], x_C)
+                x_B_recon_loss.append(F.mse_loss(recon_x[1][i], x_B[i]))
+            recon_loss_all = F.mse_loss(recon_x[0], x_A) + sum(x_B_recon_loss) + F.mse_loss(recon_x[2], x_C)
             kl_loss = -0.5 * torch.sum(1 + log_var - mean.pow(2) - log_var.exp())
-            recon_loss = sum(x_B_recon_loss) / 23 + kl_loss
+            recon_loss = sum(x_B_recon_loss) + kl_loss
             logs = {
                 'val_recon_all_loss': recon_loss_all, 
                 'val_kl_loss': kl_loss,

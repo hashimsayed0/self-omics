@@ -55,10 +55,10 @@ def compute_input_shapes(abc_dm):
     C_shape = abc_dm.C_df.shape[0]
     return A_shape, B_shape, C_shape
 
-def define_callbacks_loggers_pretraining(param, checkpoint_path, count):
+def define_callbacks_loggers_pretraining(param, checkpoint_path, count, callback_key):
     csv_logger = pl_loggers.CSVLogger(checkpoint_path, name='pretraining')
-    early_stopping = EarlyStopping('val_pretext_loss', patience=param.pretraining_patience)
-    model_checkpoint = ModelCheckpoint(csv_logger.log_dir, monitor='val_pretext_loss', mode='min', save_top_k=1)
+    early_stopping = EarlyStopping(callback_key, patience=param.pretraining_patience)
+    model_checkpoint = ModelCheckpoint(csv_logger.log_dir, monitor=callback_key, mode='min', save_top_k=1)
     wandb_logger = pl_loggers.WandbLogger(project = 'tcga_contrastive', group = '{}-pretraining'.format(param.exp_name), name = 'fold-{f}-v{v}'.format(f=count, v=csv_logger.version), offline=False)
     return early_stopping, model_checkpoint, wandb_logger, csv_logger
 
