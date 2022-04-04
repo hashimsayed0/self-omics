@@ -1,6 +1,6 @@
 name: B_masked
 program: train.py
-method: grid
+method: random
 parameters:
   use_sample_list:
     value: "True"
@@ -9,6 +9,15 @@ parameters:
       - "binsearch"
   auto_lr_find:
     value: "True"
+  pretraining_patience:
+    value: "0"
+  pretraining_max_epochs:
+    values:
+      - "5"
+      - "15"
+      - "1"
+  downstream_patience:
+    value: "15"
   gpus:
     values:
       - "-1"
@@ -63,3 +72,9 @@ parameters:
     values:
       - "zero"
       - "noise"
+  cl_loss:
+    values:
+      - "bce"
+  num_workers:
+    value: "4"
+  

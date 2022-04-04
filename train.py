@@ -27,24 +27,18 @@ for fold in range(param.num_folds):
     else:
         A_shape, B_shape, C_shape = util.compute_input_shapes(abc_dm)
         ae = lit_models.AutoEncoder(A_shape, B_shape, C_shape, **dict_args)
-        if param.mask_B:
-            callback_key = 'val_recon_B_kl_loss'
-        elif param.cont_loss != 'none':
-            callback_key = 'val_pretext_loss'
-        else:
-            callback_key = 'val_recon_loss'
-        early_stopping, model_checkpoint, wandb_logger, csv_logger = util.define_callbacks_loggers_pretraining(param, checkpoint_path, fold, callback_key)
+        early_stopping, model_checkpoint, wandb_logger, csv_logger = util.define_callbacks_loggers_pretraining(param, checkpoint_path, fold)
         ae_trainer = Trainer.from_argparse_args(param, callbacks=[early_stopping, model_checkpoint], logger=[csv_logger, wandb_logger])
         ae_trainer.fit(ae, abc_dm)
         ae_model_path = model_checkpoint.best_model_path
         wandb.finish()
         
-
-    classifier = lit_models.Classifier(ae_model_path, abc_dm.class_weights, **dict_args)
     early_stopping, model_checkpoint, wandb_logger, csv_logger = util.define_callbacks_loggers_downstream(param, checkpoint_path, fold)
+    dict_args = vars(param)
+    classifier = lit_models.Classifier(ae_model_path, abc_dm.class_weights, **dict_args)
     classifier_trainer = Trainer.from_argparse_args(param, callbacks=[early_stopping, model_checkpoint], logger=[csv_logger, wandb_logger])
     classifier_trainer.fit(classifier, abc_dm)
-    classifier_trainer.test(datamodule=abc_dm)
+    classifier_trainer.test(datamodule=abc_dm, ckpt_path='best')
     wandb.finish()
 
     del abc_dm

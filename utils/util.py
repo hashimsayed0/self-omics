@@ -29,6 +29,8 @@ def parse_arguments():
     parser.add_argument("--exp_name", type=str, default="test")
     parser.add_argument("--pretraining_patience", type=int, default=5)
     parser.add_argument("--downstream_patience", type=int, default=5)
+    parser.add_argument("--pretraining_max_epochs", type=int, default=15)
+    parser.add_argument("--downstream_max_epochs", type=int, default=100)
     
     parser = ABCDataModule.add_data_module_args(parser)
     parser = AutoEncoder.add_model_specific_args(parser)
@@ -55,7 +57,14 @@ def compute_input_shapes(abc_dm):
     C_shape = abc_dm.C_df.shape[0]
     return A_shape, B_shape, C_shape
 
-def define_callbacks_loggers_pretraining(param, checkpoint_path, count, callback_key):
+def define_callbacks_loggers_pretraining(param, checkpoint_path, count):
+    if param.mask_B:
+        callback_key = 'val_recon_B_kl_loss'
+    elif param.cont_loss != 'none':
+        callback_key = 'val_pretext_loss'
+    else:
+        callback_key = 'val_recon_loss'
+    param.max_epochs = param.pretraining_max_epochs
     csv_logger = pl_loggers.CSVLogger(checkpoint_path, name='pretraining')
     early_stopping = EarlyStopping(callback_key, patience=param.pretraining_patience)
     model_checkpoint = ModelCheckpoint(csv_logger.log_dir, monitor=callback_key, mode='min', save_top_k=1)
@@ -64,8 +73,10 @@ def define_callbacks_loggers_pretraining(param, checkpoint_path, count, callback
 
 
 def define_callbacks_loggers_downstream(param, checkpoint_path, count):
+    param.max_epochs = param.downstream_max_epochs
     csv_logger = pl_loggers.CSVLogger(checkpoint_path, name='downstream')
     early_stopping = EarlyStopping('val_down_loss', patience=param.downstream_patience)
     model_checkpoint = ModelCheckpoint(csv_logger.log_dir, monitor='val_accuracy', mode='max', save_top_k=1)
     wandb_logger = pl_loggers.WandbLogger(project = 'tcga_contrastive', group = '{}-downstream'.format(param.exp_name), name = 'fold-{f}-v{v}'.format(f=count, v=csv_logger.version), offline=False)
     return early_stopping, model_checkpoint, wandb_logger, csv_logger
+

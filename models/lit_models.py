@@ -1,14 +1,17 @@
 from pickletools import optimize
+from pl_bolts import optimizers
 import pytorch_lightning as pl
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from torch.optim import lr_scheduler
 import torch.nn.functional as F
 from .networks import SimCLRProjectionHead, CLIPProjectionHead, AENet, ClassifierNet, VAENet
 from .losses import SimCLR_Loss, weighted_binary_cross_entropy, CLIPLoss, BarlowTwinsLoss
 from .optimizers import LARS
 from torchmetrics.functional import f1_score, auroc, precision, recall, accuracy
 from sklearn.metrics import precision_score, recall_score, f1_score
+import sklearn as sk
 from pytorch_metric_learning import losses
 import wandb
 import numpy as np
@@ -138,12 +141,14 @@ class AutoEncoder(pl.LightningModule):
             x_B_recon_loss = []
             for i in range(len(x_B_masked)):
                 x_B_recon_loss.append(F.mse_loss(recon_x[1][i], x_B[i]))
-            recon_loss_all = F.mse_loss(recon_x[0], x_A) + sum(x_B_recon_loss) + F.mse_loss(recon_x[2], x_C)
-            kl_loss = -0.5 * torch.sum(1 + log_var - mean.pow(2) - log_var.exp())
-            recon_loss = sum(x_B_recon_loss)  + self.ae_weight_kl * kl_loss
+            recon_B_loss = sum(x_B_recon_loss)
+            recon_loss_all = F.mse_loss(recon_x[0], x_A) + recon_B_loss + F.mse_loss(recon_x[2], x_C)
+            kl_loss = -0.5 * torch.mean(1 + log_var - mean.pow(2) - log_var.exp())
+            recon_loss = recon_B_loss + kl_loss
             self.log("train_recon_all_loss", recon_loss_all, on_step=False, on_epoch=True)
             self.log("train_kl_loss", kl_loss, on_step=False, on_epoch=True)
             self.log("train_recon_B_kl_loss", recon_loss, on_step=False, on_epoch=True)
+            self.log("train_recon_B_loss", recon_B_loss, on_step=False, on_epoch=True)
 
         if self.cont_loss != "none":
             if self.cont_loss == "clip":
@@ -224,13 +229,15 @@ class AutoEncoder(pl.LightningModule):
             x_B_recon_loss = []
             for i in range(len(x_B_masked)):
                 x_B_recon_loss.append(F.mse_loss(recon_x[1][i], x_B[i]))
-            recon_loss_all = F.mse_loss(recon_x[0], x_A) + sum(x_B_recon_loss) + F.mse_loss(recon_x[2], x_C)
-            kl_loss = -0.5 * torch.sum(1 + log_var - mean.pow(2) - log_var.exp())
-            recon_loss = sum(x_B_recon_loss) + kl_loss
+            recon_B_loss = sum(x_B_recon_loss)
+            recon_loss_all = F.mse_loss(recon_x[0], x_A) + recon_B_loss + F.mse_loss(recon_x[2], x_C)
+            kl_loss = -0.5 * torch.mean(1 + log_var - mean.pow(2) - log_var.exp())
+            recon_loss = recon_B_loss + kl_loss
             logs = {
                 'val_recon_all_loss': recon_loss_all, 
                 'val_kl_loss': kl_loss,
-                'val_recon_B_kl_loss': recon_loss
+                'val_recon_B_kl_loss': recon_loss,
+                'val_recon_B_loss': recon_B_loss
             }
         
         if self.cont_loss != "none":
@@ -287,9 +294,11 @@ class AutoEncoder(pl.LightningModule):
             avg_recon_all_loss = torch.stack([x["val_recon_all_loss"] for x in outputs]).mean()
             avg_kl_loss = torch.stack([x["val_kl_loss"] for x in outputs]).mean()
             avg_recon_B_kl_loss = torch.stack([x["val_recon_B_kl_loss"] for x in outputs]).mean()
+            avg_recon_B_loss = torch.stack([x["val_recon_B_loss"] for x in outputs]).mean()
             self.log("val_recon_all_loss", avg_recon_all_loss)
             self.log("val_kl_loss", avg_kl_loss)
             self.log("val_recon_B_kl_loss", avg_recon_B_kl_loss)
+            self.log("val_recon_B_loss", avg_recon_B_loss)
         
         if self.cont_loss != "none":
             if self.cont_loss == "clip":
@@ -315,17 +324,21 @@ class AutoEncoder(pl.LightningModule):
             self.log("val_pretext_loss", avg_pretext_loss)
 
 class Classifier(pl.LightningModule):
-    def __init__(self, ae_model_path, class_weights, num_classes, ae_net, latent_size, cl_lr, cl_weight_decay, cl_momentum, cl_drop_p, cl_loss, **config):
+    def __init__(self, ae_model_path, class_weights, num_classes, ae_net, latent_size, cl_lr, cl_weight_decay, cl_beta1, cl_drop_p, cl_loss, cl_lr_policy, cl_epoch_num_decay, cl_decay_step_size, max_epochs, **config):
         super(Classifier, self).__init__()
         self.input_size = latent_size
         self.cl_drop_p = cl_drop_p
         self.num_classes = num_classes
         self.cl_lr = cl_lr
         self.cl_weight_decay = cl_weight_decay
-        self.cl_momentum = cl_momentum
+        self.cl_beta1 = cl_beta1
+        self.cl_lr_policy = cl_lr_policy
+        self.cl_epoch_num_decay = cl_epoch_num_decay
+        self.cl_decay_step_size = cl_decay_step_size
         self.class_weights = class_weights
         self.cl_loss = cl_loss
         self.ae_net = ae_net
+        self.cl_max_epochs = max_epochs
         self.wbce = weighted_binary_cross_entropy
         self.criterion = nn.CrossEntropyLoss()
         self.feature_extractor = AutoEncoder.load_from_checkpoint(ae_model_path)
@@ -337,9 +350,15 @@ class Classifier(pl.LightningModule):
         parser = parent_parser.add_argument_group("Classifier")
         parser.add_argument("--cl_drop_p", type=float, default=0.2)
         parser.add_argument("--num_classes", type=int, default=34)
-        parser.add_argument("--cl_lr", type=float, default=1e-3)
-        parser.add_argument("--cl_weight_decay", type=float, default=0.0001)
-        parser.add_argument("--cl_momentum", type=float, default=0.9)
+        parser.add_argument("--cl_lr", type=float, default=1e-4)
+        parser.add_argument("--cl_weight_decay", type=float, default=1e-4)
+        parser.add_argument("--cl_beta1", type=float, default=0.5)
+        parser.add_argument('--cl_lr_policy', type=str, default='linear',
+                            help='The learning rate policy for the scheduler. [linear | step | plateau | cosine]')
+        parser.add_argument('--cl_epoch_num_decay', type=int, default=50,
+                            help='Number of epoch to linearly decay learning rate to zero (lr_policy == linear)')
+        parser.add_argument('--cl_decay_step_size', type=int, default=50,
+                            help='The original learning rate multiply by a gamma every decay_step_size epoch (lr_policy == step)')
         parser.add_argument("--cl_loss", type=str, default="wbce", help="Loss function to use. Options: wbce, bce")
         return parent_parser
 
@@ -352,90 +371,148 @@ class Classifier(pl.LightningModule):
         return self.classifier(h)
 
     def configure_optimizers(self):
-        return optim.Adam(self.parameters(), lr=self.cl_lr, weight_decay=self.cl_weight_decay)
+        optimizer =  optim.Adam(self.parameters(), lr=self.cl_lr, weight_decay=self.cl_weight_decay, betas=(self.cl_beta1, 0.999))
+        if self.cl_lr_policy == 'linear':
+            def lambda_rule(epoch):
+                lr_lambda = 1.0 - max(0, epoch - self.cl_max_epochs + self.cl_epoch_num_decay) / float(self.cl_epoch_num_decay + 1)
+                return lr_lambda
+            # lr_scheduler is imported from torch.optim
+            scheduler = lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda_rule)
+        elif self.cl_lr_policy == 'step':
+            scheduler = lr_scheduler.StepLR(optimizer, step_size=self.cl_decay_step_size, gamma=0.1)
+        elif self.cl_lr_policy == 'plateau':
+            scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.2, threshold=0.01, patience=5)
+        elif self.cl_lr_policy == 'cosine':
+            scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.cl_max_epochs, eta_min=0)
+        return [optimizer], [scheduler]
     
     def training_step(self, batch, batch_idx):
         x_A, x_B, x_C, y = batch
-        y_pred = self.forward((x_A, x_B, x_C))
+        y_out = self.forward((x_A, x_B, x_C))
         if self.cl_loss == "wbce":
-            down_loss = self.wbce(y_pred, y, self.class_weights)
+            down_loss = self.wbce(y_out, y, self.class_weights)
         elif self.cl_loss == "bce":
-            down_loss = self.criterion(y_pred, y)
-        y = y.long()
-        acc = accuracy(y_pred, y)
-        self.log("train_down_loss", down_loss, on_step=True, on_epoch=True)
-        self.log("train_accuracy", acc, on_step=True, on_epoch=True)
-        return down_loss
+            down_loss = self.criterion(y_out, y)
+        y_true = y.long()
+        y_prob = F.softmax(y_out, dim=1)
+        _, y_pred = torch.max(y_prob, 1)
+
+        return {
+            "loss": down_loss,
+            "y_true": y_true.detach(),
+            "y_pred": y_pred.detach(),
+            "y_prob": y_prob.detach()
+        }
+    
+    def training_epoch_end(self, outputs):
+        avg_loss = torch.stack([x["loss"] for x in outputs]).mean()
+        self.log("train_down_loss", avg_loss)
+
+        y_true_binary = torch.cat([x["y_true"] for x in outputs]).cpu().numpy()
+        y_true = np.argmax(y_true_binary, axis=1)
+        y_pred = torch.cat([x["y_pred"] for x in outputs]).cpu().numpy()
+        y_prob = torch.cat([x["y_prob"] for x in outputs]).cpu().numpy()
+        
+        accuracy = sk.metrics.accuracy_score(y_true, y_pred)
+        precision = sk.metrics.precision_score(y_true, y_pred, average='macro', zero_division=0)
+        recall = sk.metrics.recall_score(y_true, y_pred, average='macro', zero_division=0)
+        f1 = sk.metrics.f1_score(y_true, y_pred, average='macro', zero_division=0)
+        try:
+            auc = sk.metrics.roc_auc_score(y_true_binary, y_prob, multi_class='ovo', average='macro')
+        except ValueError:
+            auc = -1
+            print('ValueError: Train ROC AUC score is not defined in this case.')
+        
+        self.log("train_accuracy", accuracy)
+        self.log("train_precision", precision)
+        self.log("train_recall", recall)
+        self.log("train_f1", f1)
+        self.log("train_auc", auc)
     
     def validation_step(self, batch, batch_idx):
         if self.global_step == 0: 
             wandb.define_metric('val_accuracy', summary='max')
         x_A, x_B, x_C, y = batch
-        y_pred = self.forward((x_A, x_B, x_C))
+        y_out = self.forward((x_A, x_B, x_C))
         if self.cl_loss == "wbce":
-            down_loss = self.wbce(y_pred, y, self.class_weights)
+            down_loss = self.wbce(y_out, y, self.class_weights)
         elif self.cl_loss == "bce":
-            down_loss = self.criterion(y_pred, y)
-        y = y.long()
+            down_loss = self.criterion(y_out, y)
+        y_true = y.long()
+        y_prob = F.softmax(y_out, dim=1)
+        _, y_pred = torch.max(y_prob, 1)
         return {
             "val_down_loss": down_loss,
-            "y": y,
-            "y_pred": y_pred
+            "y_true": y_true.detach(),
+            "y_pred": y_pred.detach(),
+            "y_prob": y_prob.detach()
         }
+
+    def validation_epoch_end(self, outputs):
+        avg_down_loss = torch.stack([x["val_down_loss"] for x in outputs]).mean()
+        self.log("val_down_loss", avg_down_loss)
+
+        y_true_binary = torch.cat([x["y_true"] for x in outputs]).cpu().numpy()
+        y_true = np.argmax(y_true_binary, axis=1)
+        y_pred = torch.cat([x["y_pred"] for x in outputs]).cpu().numpy()
+        y_prob = torch.cat([x["y_prob"] for x in outputs]).cpu().numpy()
+        
+        accuracy = sk.metrics.accuracy_score(y_true, y_pred)
+        precision = sk.metrics.precision_score(y_true, y_pred, average='macro', zero_division=0)
+        recall = sk.metrics.recall_score(y_true, y_pred, average='macro', zero_division=0)
+        f1 = sk.metrics.f1_score(y_true, y_pred, average='macro', zero_division=0)
+        try:
+            auc = sk.metrics.roc_auc_score(y_true_binary, y_prob, multi_class='ovo', average='macro')
+        except ValueError:
+            auc = -1
+            print('ValueError: Validation ROC AUC score is not defined in this case.')
+
+        self.log("val_accuracy", accuracy)
+        self.log("val_precision", precision)
+        self.log("val_recall", recall)
+        self.log("val_f1", f1)
+        self.log("val_auc", auc)
     
     def test_step(self, batch, batch_idx):
         if self.global_step == 0: 
             wandb.define_metric('test_accuracy', summary='max')
         x_A, x_B, x_C, y = batch
-        y_pred = self.forward((x_A, x_B, x_C))
+        y_out = self.forward((x_A, x_B, x_C))
         if self.cl_loss == "wbce":
-            down_loss = self.wbce(y_pred, y, self.class_weights)
+            down_loss = self.wbce(y_out, y, self.class_weights)
         elif self.cl_loss == "bce":
-            down_loss = self.criterion(y_pred, y)
-        y = y.long()
+            down_loss = self.criterion(y_out, y)
+        y_true = y.long()
+        y_prob = F.softmax(y_out, dim=1)
+        _, y_pred = torch.max(y_prob, 1)
         return {
             "test_down_loss": down_loss,
-            "y": y,
-            "y_pred": y_pred
+            "y_true": y_true.detach(),
+            "y_pred": y_pred.detach(),
+            "y_prob": y_prob.detach()
         }
-    
-    def validation_epoch_end(self, outputs):
-        avg_down_loss = torch.stack([x["val_down_loss"] for x in outputs]).mean()
-        y = torch.cat([x["y"] for x in outputs])
-        y_max = torch.argmax(y, dim=1)
-        y_pred = torch.cat([x["y_pred"] for x in outputs])
-        acc = accuracy(y_pred, y)
-        auc = auroc(y_pred, y_max, num_classes=self.num_classes)
-        # prec = precision(y_pred, y, num_classes=self.num_classes)
-        # rec = recall(y_pred, y, num_classes=self.num_classes)
-        # f1 = f1_score(y_pred, y_max, num_classes=self.num_classes)
-        y = y.detach().cpu().numpy()
-        y_pred = (y_pred.detach().cpu().numpy() > 0.5)
-        prec = precision_score(y, y_pred, average='macro', zero_division=0)
-        rec = recall_score(y, y_pred, average='macro', zero_division=0)
-        f1 = f1_score(y, y_pred, average='macro', zero_division=0)
-        self.log("val_down_loss", avg_down_loss)
-        self.log("val_accuracy", acc)
-        self.log("val_precision", prec)
-        self.log("val_recall", rec)
-        self.log("val_f1", f1)
-        self.log("val_auc", auc)
     
     def test_epoch_end(self, outputs):
         avg_down_loss = torch.stack([x["test_down_loss"] for x in outputs]).mean()
-        y = torch.cat([x["y"] for x in outputs])
-        y_max = torch.argmax(y, dim=1)
-        y_pred = torch.cat([x["y_pred"] for x in outputs])
-        acc = accuracy(y_pred, y)
-        auc = auroc(y_pred, y_max, num_classes=self.num_classes)
-        y = y.detach().cpu().numpy()
-        y_pred = (y_pred.detach().cpu().numpy() > 0.5)
-        prec = precision_score(y, y_pred, average='macro', zero_division=0)
-        rec = recall_score(y, y_pred, average='macro', zero_division=0)
-        f1 = f1_score(y, y_pred, average='macro', zero_division=0)
         self.log("test_down_loss", avg_down_loss)
-        self.log("test_accuracy", acc)
-        self.log("test_precision", prec)
-        self.log("test_recall", rec)
+
+        y_true_binary = torch.cat([x["y_true"] for x in outputs]).cpu().numpy()
+        y_true = np.argmax(y_true_binary, axis=1)
+        y_pred = torch.cat([x["y_pred"] for x in outputs]).cpu().numpy()
+        y_prob = torch.cat([x["y_prob"] for x in outputs]).cpu().numpy()
+        
+        accuracy = sk.metrics.accuracy_score(y_true, y_pred)
+        precision = sk.metrics.precision_score(y_true, y_pred, average='macro', zero_division=0)
+        recall = sk.metrics.recall_score(y_true, y_pred, average='macro', zero_division=0)
+        f1 = sk.metrics.f1_score(y_true, y_pred, average='macro', zero_division=0)
+        try:
+            auc = sk.metrics.roc_auc_score(y_true_binary, y_prob, multi_class='ovo', average='macro')
+        except ValueError:
+            auc = -1
+            print('ValueError: Validation ROC AUC score is not defined in this case.')
+
+        self.log("test_accuracy", accuracy)
+        self.log("test_precision", precision)
+        self.log("test_recall", recall)
         self.log("test_f1", f1)
         self.log("test_auc", auc)

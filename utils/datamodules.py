@@ -25,7 +25,7 @@ class ABCDataModule(LightningDataModule):
         self.feature_selection = feature_selection
         self.feature_selection_alpha = feature_selection_alpha
         self.feature_selection_percentile = feature_selection_percentile
-        self.save_hyperparameters()
+        # self.save_hyperparameters()
         self.load_data()
         self.preprocess_data()
 
@@ -133,6 +133,7 @@ class ABCDataModule(LightningDataModule):
     def calculate_class_weights(self, y_train):
         y_train = y_train.astype(int)[:,0]
         class_weights = class_weight.compute_class_weight('balanced', classes=np.unique(y_train), y=y_train)
+        # class_weights = class_weights / np.sum(class_weights)
         return class_weights
 
     def setup(self, stage = None):
