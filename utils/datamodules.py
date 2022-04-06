@@ -11,7 +11,7 @@ from sklearn.utils import class_weight
 from .preprocessing import select_features
 
 class ABCDataModule(LightningDataModule):
-    def __init__(self, current_fold, num_folds, seed, data_dir, use_sample_list, batch_size, val_ratio, num_workers, split_B, feature_selection, feature_selection_alpha, feature_selection_percentile, **config):
+    def __init__(self, current_fold, num_folds, seed, data_dir, use_sample_list, batch_size, val_ratio, num_workers, split_A, split_B, feature_selection, feature_selection_alpha, feature_selection_percentile, **config):
         super().__init__()
         self.current_fold = current_fold
         self.num_folds = num_folds
@@ -20,6 +20,7 @@ class ABCDataModule(LightningDataModule):
         self.batch_size = batch_size
         self.val_ratio = val_ratio
         self.num_workers = num_workers
+        self.split_A = split_A
         self.split_B = split_B
         self.seed = seed
         self.feature_selection = feature_selection
@@ -42,8 +43,11 @@ class ABCDataModule(LightningDataModule):
                                 help='val proportion of total training data')
         parser.add_argument('--num_workers', type=int, default=0,
                                 help='number of workers for data loading')
+        parser.add_argument('--split_A', default=False, type=lambda x: (str(x).lower() == 'true'),
+                                help='if True, A is split into 23 parts corresponding to the 23 different chromosomes')                        
         parser.add_argument('--split_B', default=False, type=lambda x: (str(x).lower() == 'true'),
                                 help='if True, B is split into 23 parts corresponding to the 23 different chromosomes')
+        
 
         parser.add_argument("--feature_selection", type=str, default="none", help="options: none, f_test, chi2, mutual_info, all")
         parser.add_argument("--feature_selection_alpha", type=float, default=0.01)
@@ -63,6 +67,8 @@ class ABCDataModule(LightningDataModule):
             sample_list = self.A_df.columns
 
         self.A_df = self.A_df.loc[:, sample_list]
+        if self.split_A:
+            self.A_df, _ = self.separate_A(self.A_df)
         self.B_df = self.B_df.loc[:, sample_list]
         if self.split_B:
             self.B_df, _ = self.separate_B(self.B_df)
@@ -74,7 +80,7 @@ class ABCDataModule(LightningDataModule):
 
     def preprocess_data(self):
         kf = StratifiedKFold(n_splits=self.num_folds, shuffle=True, random_state=self.seed)
-        for i, (train_index, test_index) in enumerate(kf.split(self.A_df.T, self.labels)):
+        for i, (train_index, test_index) in enumerate(kf.split(self.C_df.T, self.labels)):
             if i == self.current_fold:
                 self.train_index, self.val_index = train_test_split(train_index, test_size=self.val_ratio, random_state=self.seed, stratify=self.labels.iloc[train_index])
                 self.test_index = test_index
@@ -129,6 +135,34 @@ class ABCDataModule(LightningDataModule):
             B_dim_list.append(len(ch_df))
 
         return B_df_list, B_dim_list
+    
+    def separate_A(self, A_df):
+        """
+        Separate the RNA-seq dataframe into subsets according to their targeting chromosomes
+
+        Parameters:
+            A_df(DataFrame) -- a dataframe that contains the single RNA-seq matrix
+
+        Return:
+            A_df_list(list) -- a list with 23 subset dataframe
+            A_dim(list) -- the dims of each chromosome
+        """
+        anno = pd.read_csv('./anno/A_anno2.txt', dtype={'CHR': str}, index_col=0, sep='\t')
+        genes = sorted([g for g in A_df.index if g.split('.')[0] in anno.index])
+        anno = anno.sort_index()
+        anno.index = genes
+        anno_contain = anno.loc[:, :]
+        print('Separating A according to the targeting chromosome...')
+        A_df_list, A_dim_list = [], []
+        ch_id = list(range(1, 23))
+        ch_id.append('X')
+        for ch in ch_id:
+            ch_index = anno_contain[anno_contain.CHR == str(ch)].index
+            ch_df = A_df.loc[ch_index, :]
+            A_df_list.append(ch_df)
+            A_dim_list.append(len(ch_df))
+
+        return A_df_list, A_dim_list
 
     def calculate_class_weights(self, y_train):
         y_train = y_train.astype(int)[:,0]
@@ -138,11 +172,11 @@ class ABCDataModule(LightningDataModule):
 
     def setup(self, stage = None):
         if stage == "fit" or stage is None:
-            self.trainset = ABCDataset(self.A_df, self.B_df, self.C_df, self.labels, self.train_index, self.split_B)
-            self.valset = ABCDataset(self.A_df, self.B_df, self.C_df, self.labels, self.val_index, self.split_B)
+            self.trainset = ABCDataset(self.A_df, self.B_df, self.C_df, self.labels, self.train_index, self.split_A, self.split_B)
+            self.valset = ABCDataset(self.A_df, self.B_df, self.C_df, self.labels, self.val_index, self.split_A, self.split_B)
         
         if stage == "test" or stage is None:
-            self.testset = ABCDataset(self.A_df, self.B_df, self.C_df, self.labels, self.test_index, self.split_B)
+            self.testset = ABCDataset(self.A_df, self.B_df, self.C_df, self.labels, self.test_index, self.split_A, self.split_B)
     
     def train_dataloader(self):
         return DataLoader(self.trainset, batch_size=self.batch_size, num_workers=self.num_workers)

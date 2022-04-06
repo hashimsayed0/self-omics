@@ -1,4 +1,4 @@
-name: B_masked
+name: A_masked
 program: train.py
 method: random
 parameters:
@@ -21,28 +21,15 @@ parameters:
   gpus:
     values:
       - "-1"
-  ae_dim_1B:
-    values:
-      - "128"
-  ae_dim_2B:
-    values:
-      - "1024"
   ae_dim_1A:
     values:
-      - "2048"
-  ae_dim_2A:
-    values:
-      - "1024"
-  ae_dim_1C:
-    values:
-      - "1024"
-  ae_dim_2C:
-    values:
-      - "1024"
+      - "128"
   exp_name:
     values:
-      - "009"
+      - "010"
   one_fold:
+    value: "True"
+  split_A:
     value: "True"
   split_B:
     values:
@@ -59,15 +46,24 @@ parameters:
   ae_use_lrscheduler:
     values:
       - "True"
-  mask_B:
+  mask_A:
     values:
       - "True"
-  num_mask_B:
+  num_mask_A:
     values:
       - "6"
       - "12"
       - "18"
       - "23"
+  # mask_B:
+  #   values:
+  #     - "True"
+  # num_mask_B:
+  #   values:
+  #     - "6"
+  #     - "12"
+  #     - "18"
+  #     - "23"
   masking_method:
     values:
       - "zero"
@@ -77,4 +73,12 @@ parameters:
       - "bce"
   num_workers:
     value: "4"
+  ae_net:
+    values:
+      - "ae"
+      - "vae"
+  data_dir:
+    values: 
+      - "./data/ABC_inter/Unnormalized"
+      - "./data/ABC_inter/Normalized"
   

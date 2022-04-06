@@ -49,7 +49,10 @@ def set_seeds(seed):
     seed_everything(seed, workers=True)
 
 def compute_input_shapes(abc_dm):
-    A_shape = abc_dm.A_df.shape[0]
+    if isinstance(abc_dm.A_df, list):
+        A_shape = [A_ch.shape[0] for A_ch in abc_dm.A_df]
+    else:
+        A_shape = abc_dm.A_df.shape[0]
     if isinstance(abc_dm.B_df, list):
         B_shape = [B_ch.shape[0] for B_ch in abc_dm.B_df]
     else:
@@ -59,7 +62,15 @@ def compute_input_shapes(abc_dm):
 
 def define_callbacks_loggers_pretraining(param, checkpoint_path, count):
     if param.mask_B:
-        callback_key = 'val_recon_B_kl_loss'
+        if param.ae_net == 'vae':
+            callback_key = 'val_recon_B_kl_loss'
+        elif param.ae_net == 'ae':
+            callback_key = 'val_recon_B_loss'
+    elif param.mask_A:
+        if param.ae_net == 'vae':
+            callback_key = 'val_recon_A_kl_loss'
+        elif param.ae_net == 'ae':
+            callback_key = 'val_recon_A_loss'
     elif param.cont_loss != 'none':
         callback_key = 'val_pretext_loss'
     else:

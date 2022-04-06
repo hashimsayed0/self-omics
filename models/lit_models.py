@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.optim import lr_scheduler
 import torch.nn.functional as F
-from .networks import SimCLRProjectionHead, CLIPProjectionHead, AENet, ClassifierNet, VAENet
+from .networks import SimCLRProjectionHead, CLIPProjectionHead, AESepB, AESepAB, ClassifierNet, VAESepB, VAESepAB
 from .losses import SimCLR_Loss, weighted_binary_cross_entropy, CLIPLoss, BarlowTwinsLoss
 from .optimizers import LARS
 from torchmetrics.functional import f1_score, auroc, precision, recall, accuracy
@@ -17,7 +17,7 @@ import wandb
 import numpy as np
 
 class AutoEncoder(pl.LightningModule):
-    def __init__(self, input_size_A, input_size_B, input_size_C, ae_net, ae_weight_kl, latent_size, projection_size, ae_lr, ae_weight_decay, ae_momentum, ae_drop_p, cont_loss, cont_loss_temp, cont_loss_lambda, ae_optimizer, ae_use_lrscheduler, cont_loss_weight, split_B, mask_B, num_mask_B, masking_method, batch_size, ae_dim_1B, ae_dim_2B, ae_dim_1A, ae_dim_2A, ae_dim_1C, ae_dim_2C, **config):
+    def __init__(self, input_size_A, input_size_B, input_size_C, ae_net, ae_weight_kl, latent_size, projection_size, ae_lr, ae_weight_decay, ae_momentum, ae_drop_p, cont_loss, cont_loss_temp, cont_loss_lambda, ae_optimizer, ae_use_lrscheduler, cont_loss_weight, split_A, split_B, mask_A, mask_B, num_mask_A, num_mask_B, masking_method, batch_size, ae_dim_1B, ae_dim_2B, ae_dim_1A, ae_dim_2A, ae_dim_1C, ae_dim_2C, **config):
         super(AutoEncoder, self).__init__()
         self.input_size_A = input_size_A
         self.input_size_B = input_size_B
@@ -35,15 +35,24 @@ class AutoEncoder(pl.LightningModule):
         self.ae_optimizer = ae_optimizer
         self.ae_use_lrscheduler = ae_use_lrscheduler
         self.cont_loss = cont_loss
+        self.split_A = split_A
+        self.mask_A = mask_A
+        self.num_mask_A = num_mask_A
         self.split_B = split_B
         self.mask_B = mask_B
         self.num_mask_B = num_mask_B
         self.masking_method = masking_method
         
         if self.ae_net == "ae":
-            self.net = AENet((input_size_A, input_size_B, input_size_C), latent_size, split_B, dropout_p=ae_drop_p, dim_1B=ae_dim_1B, dim_2B=ae_dim_2B, dim_1A=ae_dim_1A, dim_2A=ae_dim_2A, dim_1C=ae_dim_1C, dim_2C=ae_dim_2C)
+            if self.split_A and self.split_B:
+                self.net = AESepAB((input_size_A, input_size_B, input_size_C), latent_size, mask_A, mask_B, dropout_p=ae_drop_p, dim_1B=ae_dim_1B, dim_2B=ae_dim_2B, dim_1A=ae_dim_1A, dim_2A=ae_dim_2A, dim_1C=ae_dim_1C, dim_2C=ae_dim_2C)
+            elif self.split_B:
+                self.net = AESepB((input_size_A, input_size_B, input_size_C), latent_size, dropout_p=ae_drop_p, dim_1B=ae_dim_1B, dim_2B=ae_dim_2B, dim_1A=ae_dim_1A, dim_2A=ae_dim_2A, dim_1C=ae_dim_1C, dim_2C=ae_dim_2C)
         elif self.ae_net == "vae":
-            self.net = VAENet((input_size_A, input_size_B, input_size_C), latent_size, dropout_p=ae_drop_p, dim_1B=ae_dim_1B, dim_2B=ae_dim_2B, dim_1A=ae_dim_1A, dim_2A=ae_dim_2A, dim_1C=ae_dim_1C, dim_2C=ae_dim_2C)
+            if self.split_A and self.split_B:
+                self.net = VAESepAB((input_size_A, input_size_B, input_size_C), latent_size, dropout_p=ae_drop_p, dim_1B=ae_dim_1B, dim_2B=ae_dim_2B, dim_1A=ae_dim_1A, dim_2A=ae_dim_2A, dim_1C=ae_dim_1C, dim_2C=ae_dim_2C)
+            elif self.split_B:
+                self.net = VAESepB((input_size_A, input_size_B, input_size_C), latent_size, dropout_p=ae_drop_p, dim_1B=ae_dim_1B, dim_2B=ae_dim_2B, dim_1A=ae_dim_1A, dim_2A=ae_dim_2A, dim_1C=ae_dim_1C, dim_2C=ae_dim_2C)
         
         if cont_loss != "none":
             if cont_loss == "simclr":
@@ -58,6 +67,8 @@ class AutoEncoder(pl.LightningModule):
         
         if mask_B:
             self.mask_B_ids = np.random.randint(0, len(input_size_B), size=num_mask_B)
+        if mask_A:
+            self.mask_A_ids = np.random.randint(0, len(input_size_A), size=num_mask_A)
         
         self.save_hyperparameters()
 
@@ -80,14 +91,18 @@ class AutoEncoder(pl.LightningModule):
         parser.add_argument("--cont_loss_weight", type=float, default=0.2)
         parser.add_argument("--ae_optimizer", type=str, default="adam", help="optimizer to use, options: adam, lars")
         parser.add_argument("--ae_use_lrscheduler", default=False, type=lambda x: (str(x).lower() == 'true'))
-        parser.add_argument("--ae_dim_1B", type=int, default=16)
-        parser.add_argument("--ae_dim_2B", type=int, default=32)
-        parser.add_argument("--ae_dim_1A", type=int, default=32)
-        parser.add_argument("--ae_dim_2A", type=int, default=32)
-        parser.add_argument("--ae_dim_1C", type=int, default=32)
-        parser.add_argument("--ae_dim_2C", type=int, default=32)
+        parser.add_argument("--ae_dim_1B", type=int, default=128)
+        parser.add_argument("--ae_dim_2B", type=int, default=1024)
+        parser.add_argument("--ae_dim_1A", type=int, default=2048)
+        parser.add_argument("--ae_dim_2A", type=int, default=1024)
+        parser.add_argument("--ae_dim_1C", type=int, default=1024)
+        parser.add_argument("--ae_dim_2C", type=int, default=1024)
         parser.add_argument("--load_pretrained_ae", default=False, type=lambda x: (str(x).lower() == 'true'))
         parser.add_argument("--pretrained_ae_path", type=str, default="")
+        parser.add_argument('--mask_A', default=False, type=lambda x: (str(x).lower() == 'true'),
+                                help='if True, num_mask_A chromosomes of A are masked')
+        parser.add_argument('--num_mask_A', type=int, default=0,
+                                help='number of chromosomes of A to mask')
         parser.add_argument('--mask_B', default=False, type=lambda x: (str(x).lower() == 'true'),
                                 help='if True, num_mask_B chromosomes of B are masked')
         parser.add_argument('--num_mask_B', type=int, default=0,
@@ -116,14 +131,61 @@ class AutoEncoder(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         if self.ae_net == 'ae':
             x_A, x_B, x_C, _ = batch
-            h_A, h_B, h_C = self.net.encode((x_A, x_B, x_C))
-            x_A_recon, x_B_recon, x_C_recon = self.net.decode((h_A, h_B, h_C))
-            if self.split_B:
+            if self.mask_A:
+                x_A_masked = []
+                for i in range(len(x_A)):
+                    x_A_masked.append(x_A[i])
+                    if i in self.mask_A_ids:
+                        if self.masking_method == 'zero':
+                            x_A_masked[-1] = torch.zeros_like(x_A_masked[-1])
+                        elif self.masking_method == 'noise':
+                            x_A_masked[-1] = x_A_masked[-1] + torch.randn_like(x_A_masked[-1])
+                h_A, h_B, h_C = self.net.encode((x_A_masked, x_B, x_C))
+                x_A_recon, x_B_recon, x_C_recon = self.net.decode((h_A, h_B, h_C))
+                x_A_recon_loss = []
+                for i in range(len(x_A)):
+                    x_A_recon_loss.append(F.mse_loss(x_A_recon[i], x_A[i]))
+                recon_A_loss = sum(x_A_recon_loss)
+                if self.split_B:
+                    x_B_recon_loss = []
+                    for i in range(len(x_B)):
+                        x_B_recon_loss.append(F.mse_loss(x_B_recon[i], x_B[i]))
+                    recon_B_loss = sum(x_B_recon_loss)
+                recon_loss_all = recon_A_loss + recon_B_loss + F.mse_loss(x_C_recon, x_C)
+                recon_loss = recon_A_loss
+                self.log("train_recon_all_loss", recon_loss_all, on_step=False, on_epoch=True)
+                self.log("train_recon_A_loss", recon_A_loss, on_step=False, on_epoch=True)
+            
+            elif self.mask_B:
+                x_B_masked = []
+                for i in range(len(x_B)):
+                    x_B_masked.append(x_B[i])
+                    if i in self.mask_B_ids:
+                        if self.masking_method == 'zero':
+                            x_B_masked[-1] = torch.zeros_like(x_B_masked[-1])
+                        elif self.masking_method == 'noise':
+                            x_B_masked[-1] = x_B_masked[-1] + torch.randn_like(x_B_masked[-1])
+                
+                h_A, h_B, h_C = self.net.encode((x_A, x_B_masked, x_C))
+                x_A_recon, x_B_recon, x_C_recon = self.net.decode((h_A, h_B, h_C))
                 x_B_recon_loss = []
                 for i in range(len(x_B)):
                     x_B_recon_loss.append(F.mse_loss(x_B_recon[i], x_B[i]))
-                recon_loss = F.mse_loss(x_A_recon, x_A) + sum(x_B_recon_loss) + F.mse_loss(x_C_recon, x_C)        
-            self.log("train_recon_loss", recon_loss, on_step=False, on_epoch=True)
+                recon_B_loss = sum(x_B_recon_loss)
+                recon_loss_all = F.mse_loss(x_A_recon, x_A) + recon_B_loss + F.mse_loss(x_C_recon, x_C)
+                recon_loss = recon_B_loss
+                self.log("train_recon_all_loss", recon_loss_all, on_step=False, on_epoch=True)
+                self.log("train_recon_B_loss", recon_B_loss, on_step=False, on_epoch=True)
+            
+            else:
+                h_A, h_B, h_C = self.net.encode((x_A, x_B, x_C))
+                x_A_recon, x_B_recon, x_C_recon = self.net.decode((h_A, h_B, h_C))
+                if self.split_B:
+                    x_B_recon_loss = []
+                    for i in range(len(x_B)):
+                        x_B_recon_loss.append(F.mse_loss(x_B_recon[i], x_B[i]))
+                    recon_loss = F.mse_loss(x_A_recon, x_A) + sum(x_B_recon_loss) + F.mse_loss(x_C_recon, x_C)        
+                self.log("train_recon_loss", recon_loss, on_step=False, on_epoch=True)
         
         elif self.ae_net == 'vae':
             x_A, x_B, x_C, _ = batch
@@ -137,18 +199,46 @@ class AutoEncoder(pl.LightningModule):
                         elif self.masking_method == 'noise':
                             x_B_masked[-1] = x_B_masked[-1] + torch.randn_like(x_B_masked[-1])
 
-            z, recon_x, mean, log_var = self.net((x_A, x_B_masked, x_C))
-            x_B_recon_loss = []
-            for i in range(len(x_B_masked)):
-                x_B_recon_loss.append(F.mse_loss(recon_x[1][i], x_B[i]))
-            recon_B_loss = sum(x_B_recon_loss)
-            recon_loss_all = F.mse_loss(recon_x[0], x_A) + recon_B_loss + F.mse_loss(recon_x[2], x_C)
-            kl_loss = -0.5 * torch.mean(1 + log_var - mean.pow(2) - log_var.exp())
-            recon_loss = recon_B_loss + kl_loss
-            self.log("train_recon_all_loss", recon_loss_all, on_step=False, on_epoch=True)
-            self.log("train_kl_loss", kl_loss, on_step=False, on_epoch=True)
-            self.log("train_recon_B_kl_loss", recon_loss, on_step=False, on_epoch=True)
-            self.log("train_recon_B_loss", recon_B_loss, on_step=False, on_epoch=True)
+                z, recon_x, mean, log_var = self.net((x_A, x_B_masked, x_C))
+                x_B_recon_loss = []
+                for i in range(len(x_B_masked)):
+                    x_B_recon_loss.append(F.mse_loss(recon_x[1][i], x_B[i]))
+                recon_B_loss = sum(x_B_recon_loss)
+                recon_loss_all = F.mse_loss(recon_x[0], x_A) + recon_B_loss + F.mse_loss(recon_x[2], x_C)
+                kl_loss = -0.5 * torch.mean(1 + log_var - mean.pow(2) - log_var.exp())
+                recon_loss = recon_B_loss + kl_loss
+                self.log("train_recon_all_loss", recon_loss_all, on_step=False, on_epoch=True)
+                self.log("train_kl_loss", kl_loss, on_step=False, on_epoch=True)
+                self.log("train_recon_B_kl_loss", recon_loss, on_step=False, on_epoch=True)
+                self.log("train_recon_B_loss", recon_B_loss, on_step=False, on_epoch=True)
+            
+            elif self.mask_A:
+                x_A_masked = []
+                for i in range(len(x_A)):
+                    x_A_masked.append(x_A[i])
+                    if i in self.mask_A_ids:
+                        if self.masking_method == 'zero':
+                            x_A_masked[-1] = torch.zeros_like(x_A_masked[-1])
+                        elif self.masking_method == 'noise':
+                            x_A_masked[-1] = x_A_masked[-1] + torch.randn_like(x_A_masked[-1])
+
+                z, recon_x, mean, log_var = self.net((x_A_masked, x_B, x_C))
+                x_A_recon_loss = []
+                for i in range(len(x_A_masked)):
+                    x_A_recon_loss.append(F.mse_loss(recon_x[0][i], x_A[i]))
+                recon_A_loss = sum(x_A_recon_loss)
+                x_B_recon_loss = []
+                for i in range(len(x_B)):
+                    x_B_recon_loss.append(F.mse_loss(recon_x[1][i], x_B[i]))
+                recon_B_loss = sum(x_B_recon_loss)
+                recon_loss_all = recon_A_loss + recon_B_loss + F.mse_loss(recon_x[2], x_C)
+                kl_loss = -0.5 * torch.mean(1 + log_var - mean.pow(2) - log_var.exp())
+                recon_loss = recon_A_loss + kl_loss
+                self.log("train_recon_all_loss", recon_loss_all, on_step=False, on_epoch=True)
+                self.log("train_kl_loss", kl_loss, on_step=False, on_epoch=True)
+                self.log("train_recon_A_kl_loss", recon_loss, on_step=False, on_epoch=True)
+                self.log("train_recon_A_loss", recon_A_loss, on_step=False, on_epoch=True)
+
 
         if self.cont_loss != "none":
             if self.cont_loss == "clip":
@@ -204,14 +294,63 @@ class AutoEncoder(pl.LightningModule):
             wandb.define_metric('val_recon_B_kl_loss', summary='min')
         if self.ae_net == 'ae':
             x_A, x_B, x_C, _ = batch
-            h_A, h_B, h_C = self.net.encode((x_A, x_B, x_C))
-            x_A_recon, x_B_recon, x_C_recon = self.net.decode((h_A, h_B, h_C))
-            if self.split_B:
+            if self.mask_A:
+                x_A_masked = []
+                for i in range(len(x_A)):
+                    x_A_masked.append(x_A[i])
+                    if i in self.mask_A_ids:
+                        if self.masking_method == 'zero':
+                            x_A_masked[-1] = torch.zeros_like(x_A_masked[-1])
+                        elif self.masking_method == 'noise':
+                            x_A_masked[-1] = x_A_masked[-1] + torch.randn_like(x_A_masked[-1])
+                h_A, h_B, h_C = self.net.encode((x_A_masked, x_B, x_C))
+                x_A_recon, x_B_recon, x_C_recon = self.net.decode((h_A, h_B, h_C))
+                x_A_recon_loss = []
+                for i in range(len(x_A)):
+                    x_A_recon_loss.append(F.mse_loss(x_A_recon[i], x_A[i]))
+                recon_A_loss = sum(x_A_recon_loss)
+                if self.split_B:
+                    x_B_recon_loss = []
+                    for i in range(len(x_B)):
+                        x_B_recon_loss.append(F.mse_loss(x_B_recon[i], x_B[i]))
+                    recon_B_loss = sum(x_B_recon_loss)
+                recon_loss_all = recon_A_loss + recon_B_loss + F.mse_loss(x_C_recon, x_C)
+                recon_loss = recon_A_loss
+                logs = {
+                    'val_recon_all_loss': recon_loss_all,
+                    'val_recon_A_loss': recon_A_loss
+                }
+            elif self.mask_B:
+                x_B_masked = []
+                for i in range(len(x_B)):
+                    x_B_masked.append(x_B[i])
+                    if i in self.mask_B_ids:
+                        if self.masking_method == 'zero':
+                            x_B_masked[-1] = torch.zeros_like(x_B_masked[-1])
+                        elif self.masking_method == 'noise':
+                            x_B_masked[-1] = x_B_masked[-1] + torch.randn_like(x_B_masked[-1])
+                
+                h_A, h_B, h_C = self.net.encode((x_A, x_B_masked, x_C))
+                x_A_recon, x_B_recon, x_C_recon = self.net.decode((h_A, h_B, h_C))
                 x_B_recon_loss = []
                 for i in range(len(x_B)):
                     x_B_recon_loss.append(F.mse_loss(x_B_recon[i], x_B[i]))
-                recon_loss = F.mse_loss(x_A_recon, x_A) + sum(x_B_recon_loss) + F.mse_loss(x_C_recon, x_C)    
-            logs = {'val_recon_loss': recon_loss}
+                recon_B_loss = sum(x_B_recon_loss)
+                recon_loss_all = F.mse_loss(x_A_recon, x_A) + recon_B_loss + F.mse_loss(x_C_recon, x_C)
+                recon_loss = recon_B_loss
+                logs = {
+                    'val_recon_all_loss': recon_loss_all,
+                    'val_recon_B_loss': recon_B_loss
+                }
+            else:
+                h_A, h_B, h_C = self.net.encode((x_A, x_B, x_C))
+                x_A_recon, x_B_recon, x_C_recon = self.net.decode((h_A, h_B, h_C))
+                if self.split_B:
+                    x_B_recon_loss = []
+                    for i in range(len(x_B)):
+                        x_B_recon_loss.append(F.mse_loss(x_B_recon[i], x_B[i]))
+                    recon_loss = F.mse_loss(x_A_recon, x_A) + sum(x_B_recon_loss) + F.mse_loss(x_C_recon, x_C)    
+                logs = {'val_recon_loss': recon_loss}
 
         elif self.ae_net == 'vae':
             x_A, x_B, x_C, _ = batch
@@ -225,20 +364,49 @@ class AutoEncoder(pl.LightningModule):
                         elif self.masking_method == 'noise':
                             x_B_masked[-1] = x_B_masked[-1] + torch.randn_like(x_B_masked[-1])
 
-            z, recon_x, mean, log_var = self.net((x_A, x_B_masked, x_C))
-            x_B_recon_loss = []
-            for i in range(len(x_B_masked)):
-                x_B_recon_loss.append(F.mse_loss(recon_x[1][i], x_B[i]))
-            recon_B_loss = sum(x_B_recon_loss)
-            recon_loss_all = F.mse_loss(recon_x[0], x_A) + recon_B_loss + F.mse_loss(recon_x[2], x_C)
-            kl_loss = -0.5 * torch.mean(1 + log_var - mean.pow(2) - log_var.exp())
-            recon_loss = recon_B_loss + kl_loss
-            logs = {
-                'val_recon_all_loss': recon_loss_all, 
-                'val_kl_loss': kl_loss,
-                'val_recon_B_kl_loss': recon_loss,
-                'val_recon_B_loss': recon_B_loss
-            }
+                z, recon_x, mean, log_var = self.net((x_A, x_B_masked, x_C))
+                x_B_recon_loss = []
+                for i in range(len(x_B_masked)):
+                    x_B_recon_loss.append(F.mse_loss(recon_x[1][i], x_B[i]))
+                recon_B_loss = sum(x_B_recon_loss)
+                recon_loss_all = F.mse_loss(recon_x[0], x_A) + recon_B_loss + F.mse_loss(recon_x[2], x_C)
+                kl_loss = -0.5 * torch.mean(1 + log_var - mean.pow(2) - log_var.exp())
+                recon_loss = recon_B_loss + kl_loss
+                logs = {
+                    'val_recon_all_loss': recon_loss_all, 
+                    'val_kl_loss': kl_loss,
+                    'val_recon_B_kl_loss': recon_loss,
+                    'val_recon_B_loss': recon_B_loss
+                }
+
+            elif self.mask_A:
+                x_A_masked = []
+                for i in range(len(x_A)):
+                    x_A_masked.append(x_A[i])
+                    if i in self.mask_A_ids:
+                        if self.masking_method == 'zero':
+                            x_A_masked[-1] = torch.zeros_like(x_A_masked[-1])
+                        elif self.masking_method == 'noise':
+                            x_A_masked[-1] = x_A_masked[-1] + torch.randn_like(x_A_masked[-1])
+
+                z, recon_x, mean, log_var = self.net((x_A_masked, x_B, x_C))
+                x_A_recon_loss = []
+                for i in range(len(x_A_masked)):
+                    x_A_recon_loss.append(F.mse_loss(recon_x[0][i], x_A[i]))
+                recon_A_loss = sum(x_A_recon_loss)
+                x_B_recon_loss = []
+                for i in range(len(x_B)):
+                    x_B_recon_loss.append(F.mse_loss(recon_x[1][i], x_B[i]))
+                recon_B_loss = sum(x_B_recon_loss)
+                recon_loss_all = recon_A_loss + recon_B_loss + F.mse_loss(recon_x[2], x_C)
+                kl_loss = -0.5 * torch.mean(1 + log_var - mean.pow(2) - log_var.exp())
+                recon_loss = recon_A_loss + kl_loss
+                logs = {
+                    'val_recon_all_loss': recon_loss_all, 
+                    'val_kl_loss': kl_loss,
+                    'val_recon_A_kl_loss': recon_loss,
+                    'val_recon_A_loss': recon_A_loss
+                }
         
         if self.cont_loss != "none":
             if self.cont_loss == "clip":
@@ -288,17 +456,35 @@ class AutoEncoder(pl.LightningModule):
 
     def validation_epoch_end(self, outputs):
         if self.ae_net == 'ae':
-            avg_recon_loss = torch.stack([x["val_recon_loss"] for x in outputs]).mean()
-            self.log("val_recon_loss", avg_recon_loss)
+            if self.mask_A:
+                avg_recon_all_loss = torch.stack([x['val_recon_all_loss'] for x in outputs]).mean()
+                avg_recon_A_loss = torch.stack([x['val_recon_A_loss'] for x in outputs]).mean()
+                self.log('val_recon_all_loss', avg_recon_all_loss)
+                self.log('val_recon_A_loss', avg_recon_A_loss)
+            elif self.mask_B:
+                avg_recon_all_loss = torch.stack([x['val_recon_all_loss'] for x in outputs]).mean()
+                avg_recon_B_loss = torch.stack([x['val_recon_B_loss'] for x in outputs]).mean()
+                self.log('val_recon_all_loss', avg_recon_all_loss)
+                self.log('val_recon_B_loss', avg_recon_B_loss)
+            else:
+                avg_recon_loss = torch.stack([x["val_recon_loss"] for x in outputs]).mean()
+                self.log("val_recon_loss", avg_recon_loss)
         elif self.ae_net == 'vae':
             avg_recon_all_loss = torch.stack([x["val_recon_all_loss"] for x in outputs]).mean()
             avg_kl_loss = torch.stack([x["val_kl_loss"] for x in outputs]).mean()
-            avg_recon_B_kl_loss = torch.stack([x["val_recon_B_kl_loss"] for x in outputs]).mean()
-            avg_recon_B_loss = torch.stack([x["val_recon_B_loss"] for x in outputs]).mean()
             self.log("val_recon_all_loss", avg_recon_all_loss)
             self.log("val_kl_loss", avg_kl_loss)
-            self.log("val_recon_B_kl_loss", avg_recon_B_kl_loss)
-            self.log("val_recon_B_loss", avg_recon_B_loss)
+
+            if self.mask_A:
+                avg_recon_A_loss = torch.stack([x["val_recon_A_loss"] for x in outputs]).mean()
+                avg_kl_A_loss = torch.stack([x["val_recon_A_kl_loss"] for x in outputs]).mean()
+                self.log("val_recon_A_loss", avg_recon_A_loss)
+                self.log("val_recon_A_kl_loss", avg_kl_A_loss)
+            elif self.mask_B:
+                avg_recon_B_kl_loss = torch.stack([x["val_recon_B_kl_loss"] for x in outputs]).mean()
+                avg_recon_B_loss = torch.stack([x["val_recon_B_loss"] for x in outputs]).mean()
+                self.log("val_recon_B_kl_loss", avg_recon_B_kl_loss)
+                self.log("val_recon_B_loss", avg_recon_B_loss)
         
         if self.cont_loss != "none":
             if self.cont_loss == "clip":
