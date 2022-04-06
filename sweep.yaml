@@ -9,15 +9,11 @@ parameters:
       - "binsearch"
   auto_lr_find:
     value: "True"
-  pretraining_patience:
-    value: "0"
   pretraining_max_epochs:
     values:
-      - "5"
-      - "15"
+      - "50"
+      - "20"
       - "1"
-  downstream_patience:
-    value: "15"
   gpus:
     values:
       - "-1"
