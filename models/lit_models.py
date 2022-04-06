@@ -17,7 +17,7 @@ import wandb
 import numpy as np
 
 class AutoEncoder(pl.LightningModule):
-    def __init__(self, input_size_A, input_size_B, input_size_C, ae_net, ae_weight_kl, latent_size, projection_size, ae_lr, ae_weight_decay, ae_momentum, ae_drop_p, cont_loss, cont_loss_temp, cont_loss_lambda, ae_optimizer, ae_use_lrscheduler, cont_loss_weight, split_A, split_B, mask_A, mask_B, num_mask_A, num_mask_B, masking_method, batch_size, ae_dim_1B, ae_dim_2B, ae_dim_1A, ae_dim_2A, ae_dim_1C, ae_dim_2C, **config):
+    def __init__(self, input_size_A, input_size_B, input_size_C, ae_net, ae_weight_kl, latent_size, projection_size, ae_lr, ae_weight_decay, ae_momentum, ae_drop_p, ae_beta1, ae_lr_policy, ae_epoch_num_decay, ae_decay_step_size, max_epochs, cont_loss, cont_loss_temp, cont_loss_lambda, ae_optimizer, ae_use_lrscheduler, cont_loss_weight, split_A, split_B, mask_A, mask_B, num_mask_A, num_mask_B, masking_method, batch_size, ae_dim_1B, ae_dim_2B, ae_dim_1A, ae_dim_2A, ae_dim_1C, ae_dim_2C, **config):
         super(AutoEncoder, self).__init__()
         self.input_size_A = input_size_A
         self.input_size_B = input_size_B
@@ -29,6 +29,11 @@ class AutoEncoder(pl.LightningModule):
         self.ae_weight_decay = ae_weight_decay
         self.ae_momentum = ae_momentum
         self.ae_drop_p = ae_drop_p
+        self.ae_beta1 = ae_beta1
+        self.ae_lr_policy = ae_lr_policy
+        self.ae_epoch_num_decay = ae_epoch_num_decay
+        self.ae_decay_step_size = ae_decay_step_size
+        self.ae_max_epochs = max_epochs
         self.cont_loss_weight = cont_loss_weight
         self.cont_loss_temp = cont_loss_temp
         self.cont_loss_lambda = cont_loss_lambda
@@ -82,7 +87,7 @@ class AutoEncoder(pl.LightningModule):
         parser.add_argument("--latent_size", type=int, default=512)
         parser.add_argument("--projection_size", type=int, default=256)
         parser.add_argument("--ae_lr", type=float, default=1e-3)
-        parser.add_argument("--ae_weight_decay", type=float, default=0.0001)
+        parser.add_argument("--ae_weight_decay", type=float, default=1e-4)
         parser.add_argument("--ae_momentum", type=float, default=0.9)
         parser.add_argument("--ae_drop_p", type=float, default=0.2)
         parser.add_argument("--cont_loss", type=str, default="simclr", help="contrastive loss to use, options: none, simclr, clip, barlowtwins")
@@ -91,6 +96,13 @@ class AutoEncoder(pl.LightningModule):
         parser.add_argument("--cont_loss_weight", type=float, default=0.2)
         parser.add_argument("--ae_optimizer", type=str, default="adam", help="optimizer to use, options: adam, lars")
         parser.add_argument("--ae_use_lrscheduler", default=False, type=lambda x: (str(x).lower() == 'true'))
+        parser.add_argument("--ae_beta1", type=float, default=0.5)
+        parser.add_argument('--ae_lr_policy', type=str, default='linear',
+                            help='The learning rate policy for the scheduler. [linear | step | plateau | cosine]')
+        parser.add_argument('--ae_epoch_num_decay', type=int, default=50,
+                            help='Number of epoch to linearly decay learning rate to zero (lr_policy == linear)')
+        parser.add_argument('--ae_decay_step_size', type=int, default=50,
+                            help='The original learning rate multiply by a gamma every decay_step_size epoch (lr_policy == step)')
         parser.add_argument("--ae_dim_1B", type=int, default=128)
         parser.add_argument("--ae_dim_2B", type=int, default=1024)
         parser.add_argument("--ae_dim_1A", type=int, default=2048)
@@ -127,6 +139,23 @@ class AutoEncoder(pl.LightningModule):
                                                             T_max=500,
                                                             eta_min=self.hparams.ae_lr/50)
         return [optimizer], [lr_scheduler]
+
+        # optimizer =  optim.Adam(self.parameters(), lr=self.ae_lr, weight_decay=self.ae_weight_decay, betas=(self.ae_beta1, 0.999))
+        # if self.ae_lr_policy == 'linear':
+        #     def lambda_rule(epoch):
+        #         lr_lambda = 1.0 - max(0, epoch - self.ae_max_epochs + self.ae_epoch_num_decay) / float(self.ae_epoch_num_decay + 1)
+        #         return lr_lambda
+        #     # lr_scheduler is imported from torch.optim
+        #     scheduler = lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda_rule)
+        # elif self.ae_lr_policy == 'step':
+        #     scheduler = lr_scheduler.StepLR(optimizer, step_size=self.ae_decay_step_size, gamma=0.1)
+        # elif self.ae_lr_policy == 'plateau':
+        #     scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.2, threshold=0.01, patience=5)
+        # elif self.ae_lr_policy == 'cosine':
+        #     scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.ae_max_epochs, eta_min=0)
+        # elif self.ae_lr_policy == 'none':
+        #     return optimizer                            
+        # return [optimizer], [scheduler]
     
     def training_step(self, batch, batch_idx):
         if self.ae_net == 'ae':
