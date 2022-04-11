@@ -17,7 +17,7 @@ import wandb
 import numpy as np
 
 class AutoEncoder(pl.LightningModule):
-    def __init__(self, input_size_A, input_size_B, input_size_C, ae_net, ae_weight_kl, latent_size, projection_size, ae_lr, ae_weight_decay, ae_momentum, ae_drop_p, ae_beta1, ae_lr_policy, ae_epoch_num_decay, ae_decay_step_size, max_epochs, cont_loss, cont_loss_temp, cont_loss_lambda, ae_optimizer, ae_use_lrscheduler, cont_loss_weight, split_A, split_B, mask_A, mask_B, num_mask_A, num_mask_B, masking_method, batch_size, ae_dim_1B, ae_dim_2B, ae_dim_1A, ae_dim_2A, ae_dim_1C, ae_dim_2C, **config):
+    def __init__(self, input_size_A, input_size_B, input_size_C, ae_net, ae_weight_kl, latent_size, projection_size, ae_lr, ae_weight_decay, ae_momentum, ae_drop_p, ae_beta1, ae_lr_policy, ae_epoch_num_decay, ae_decay_step_size, max_epochs, cont_loss, cont_loss_temp, cont_loss_lambda, ae_optimizer, ae_use_lrscheduler, cont_loss_weight, split_A, split_B, mask_A, mask_B, num_mask_A, num_mask_B, masking_method, recon_all, batch_size, ae_dim_1B, ae_dim_2B, ae_dim_1A, ae_dim_2A, ae_dim_1C, ae_dim_2C, **config):
         super(AutoEncoder, self).__init__()
         self.input_size_A = input_size_A
         self.input_size_B = input_size_B
@@ -47,6 +47,7 @@ class AutoEncoder(pl.LightningModule):
         self.mask_B = mask_B
         self.num_mask_B = num_mask_B
         self.masking_method = masking_method
+        self.recon_all = recon_all
         
         if self.ae_net == "ae":
             if self.split_A and self.split_B:
@@ -121,6 +122,8 @@ class AutoEncoder(pl.LightningModule):
                                 help='number of chromosomes of B to mask')
         parser.add_argument('--masking_method', type=str, default='zero',
                                 help='method to mask data, can be "zero" or "noise"')
+        parser.add_argument('--recon_all', default=False, type=lambda x: (str(x).lower() == 'true'),
+                                help='if True, modalities A, B and C will be reconstructed with higher weightage to masked modality, else, only the masked modality will be reconstructed')
         return parent_parser
 
     def forward(self, x):
@@ -181,7 +184,11 @@ class AutoEncoder(pl.LightningModule):
                         x_B_recon_loss.append(F.mse_loss(x_B_recon[i], x_B[i]))
                     recon_B_loss = sum(x_B_recon_loss)
                 recon_loss_all = recon_A_loss + recon_B_loss + F.mse_loss(x_C_recon, x_C)
-                recon_loss = recon_A_loss
+                if self.recon_all:
+                    recon_loss_all = 0.5 * recon_A_loss + 0.25 * recon_B_loss + 0.25 * F.mse_loss(x_C_recon, x_C)
+                    recon_loss = recon_loss_all
+                else:
+                    recon_loss = recon_A_loss
                 self.log("train_recon_all_loss", recon_loss_all, on_step=False, on_epoch=True)
                 self.log("train_recon_A_loss", recon_A_loss, on_step=False, on_epoch=True)
             
@@ -202,7 +209,11 @@ class AutoEncoder(pl.LightningModule):
                     x_B_recon_loss.append(F.mse_loss(x_B_recon[i], x_B[i]))
                 recon_B_loss = sum(x_B_recon_loss)
                 recon_loss_all = F.mse_loss(x_A_recon, x_A) + recon_B_loss + F.mse_loss(x_C_recon, x_C)
-                recon_loss = recon_B_loss
+                if self.recon_all:
+                    recon_loss_all = 0.25 * F.mse_loss(x_A_recon, x_A) + 0.5 * recon_B_loss + 0.25 * F.mse_loss(x_C_recon, x_C)
+                    recon_loss = recon_loss_all
+                else:
+                    recon_loss = recon_B_loss
                 self.log("train_recon_all_loss", recon_loss_all, on_step=False, on_epoch=True)
                 self.log("train_recon_B_loss", recon_B_loss, on_step=False, on_epoch=True)
             
@@ -344,7 +355,11 @@ class AutoEncoder(pl.LightningModule):
                         x_B_recon_loss.append(F.mse_loss(x_B_recon[i], x_B[i]))
                     recon_B_loss = sum(x_B_recon_loss)
                 recon_loss_all = recon_A_loss + recon_B_loss + F.mse_loss(x_C_recon, x_C)
-                recon_loss = recon_A_loss
+                if self.recon_all:
+                    recon_loss_all = 0.5 * recon_A_loss + 0.25 * recon_B_loss + 0.25 * F.mse_loss(x_C_recon, x_C)
+                    recon_loss = recon_loss_all
+                else:
+                    recon_loss = recon_A_loss
                 logs = {
                     'val_recon_all_loss': recon_loss_all,
                     'val_recon_A_loss': recon_A_loss
@@ -366,7 +381,11 @@ class AutoEncoder(pl.LightningModule):
                     x_B_recon_loss.append(F.mse_loss(x_B_recon[i], x_B[i]))
                 recon_B_loss = sum(x_B_recon_loss)
                 recon_loss_all = F.mse_loss(x_A_recon, x_A) + recon_B_loss + F.mse_loss(x_C_recon, x_C)
-                recon_loss = recon_B_loss
+                if self.recon_all:
+                    recon_loss_all = 0.25 * F.mse_loss(x_A_recon, x_A) + 0.5 * recon_B_loss + 0.25 * F.mse_loss(x_C_recon, x_C)
+                    recon_loss = recon_loss_all
+                else:
+                    recon_loss = recon_B_loss
                 logs = {
                     'val_recon_all_loss': recon_loss_all,
                     'val_recon_B_loss': recon_B_loss
