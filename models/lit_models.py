@@ -750,3 +750,9 @@ class Classifier(pl.LightningModule):
         self.log("test_recall", recall)
         self.log("test_f1", f1)
         self.log("test_auc", auc)
+    
+
+class SurvivalModel(pl.LightningModule):
+    def __init__(self, **config):
+        super(SurvivalModel, self).__init__()
+        

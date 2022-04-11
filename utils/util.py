@@ -23,7 +23,9 @@ def parse_arguments():
     parser.add_argument("--num_folds", type=int, default=5, 
                             help="number of folds for k-fold cross validation if one_fold is set to False")
     parser.add_argument("--class_0_weight", type=float, default=0.5, 
-                            help="weight of class 0 in the loss function")    
+                            help="weight of class 0 in the loss function")   
+    parser.add_argument("--downstream_task", type=str, default='ctc', 
+                            help='options: ctc (cancer type classification), sa (survival analysis)')
     
     # trainer related arguments
     parser.add_argument("--exp_name", type=str, default="test")

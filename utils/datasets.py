@@ -12,6 +12,7 @@ class ABCDataset(Dataset):
         super().__init__()
         self.split_A = split_A
         self.split_B = split_B
+        self.indeces = indices
 
         if self.split_A:
             A_df = [A_df[ch].iloc[:, indices] for ch in range(len(A_df))]
@@ -31,7 +32,7 @@ class ABCDataset(Dataset):
         self.label_tensors = torch.tensor(labels.values.astype(float)).float()
     
     def __len__(self):
-        return len(self.label_tensors)
+        return len(self.indices)
     
     def __getitem__(self, idx):
         if self.split_A:
