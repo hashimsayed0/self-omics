@@ -57,8 +57,8 @@
                 // "--feature_selection", "f_test",
                 // "--fast_dev_run",
                 // "--max_epochs", "1",
-                // "--load_pretrained_ae", "True",
-                // "--pretrained_ae_path", "./checkpoints/003/fold-0/pretraining/version_0/epoch=1-step=557.ckpt"
+                "--load_pretrained_ae", "True",
+                "--pretrained_ae_path", "./checkpoints/test/fold-0/pretraining/version_22/epoch=0-step=11.ckpt"
             ]
         }
     ]

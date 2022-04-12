@@ -161,8 +161,8 @@ class AutoEncoder(pl.LightningModule):
         #     return optimizer                            
         # return [optimizer], [scheduler]
     
-    def train(self, mode):
-        super().train(True)
+    def train(self, mode=True):
+        super().train(mode)
         self.mode = "train"
     
     def eval(self):
@@ -325,9 +325,9 @@ class AutoEncoder(pl.LightningModule):
             return recon_loss
     
     def validation_step(self, batch, batch_idx):
-        if self.global_step == 0: 
-            wandb.define_metric('val_pretext_loss', summary='min')
-            wandb.define_metric('val_recon_loss', summary='min')
+        # if self.global_step == 0: 
+        #     wandb.define_metric('val_pretext_loss', summary='min')
+        #     wandb.define_metric('val_recon_loss', summary='min')
         
         if self.ae_net == 'ae':
             logs, h, recon_loss = self.ae_step(batch) 
@@ -516,59 +516,59 @@ class AutoEncoder(pl.LightningModule):
             avg = torch.stack([x[key] for x in outputs]).mean()
             self.log(key, avg)
         
-        if self.ae_net == 'ae':
-            if self.mask_A:
-                avg_recon_all_loss = torch.stack([x['val_recon_all_loss'] for x in outputs]).mean()
-                avg_recon_A_loss = torch.stack([x['val_recon_A_loss'] for x in outputs]).mean()
-                self.log('val_recon_all_loss', avg_recon_all_loss)
-                self.log('val_recon_A_loss', avg_recon_A_loss)
-            elif self.mask_B:
-                avg_recon_all_loss = torch.stack([x['val_recon_all_loss'] for x in outputs]).mean()
-                avg_recon_B_loss = torch.stack([x['val_recon_B_loss'] for x in outputs]).mean()
-                self.log('val_recon_all_loss', avg_recon_all_loss)
-                self.log('val_recon_B_loss', avg_recon_B_loss)
-            else:
-                avg_recon_loss = torch.stack([x["val_recon_loss"] for x in outputs]).mean()
-                self.log("val_recon_loss", avg_recon_loss)
-        elif self.ae_net == 'vae':
-            avg_recon_all_loss = torch.stack([x["val_recon_all_loss"] for x in outputs]).mean()
-            avg_kl_loss = torch.stack([x["val_kl_loss"] for x in outputs]).mean()
-            self.log("val_recon_all_loss", avg_recon_all_loss)
-            self.log("val_kl_loss", avg_kl_loss)
+        # if self.ae_net == 'ae':
+        #     if self.mask_A:
+        #         avg_recon_all_loss = torch.stack([x['val_recon_all_loss'] for x in outputs]).mean()
+        #         avg_recon_A_loss = torch.stack([x['val_recon_A_loss'] for x in outputs]).mean()
+        #         self.log('val_recon_all_loss', avg_recon_all_loss)
+        #         self.log('val_recon_A_loss', avg_recon_A_loss)
+        #     elif self.mask_B:
+        #         avg_recon_all_loss = torch.stack([x['val_recon_all_loss'] for x in outputs]).mean()
+        #         avg_recon_B_loss = torch.stack([x['val_recon_B_loss'] for x in outputs]).mean()
+        #         self.log('val_recon_all_loss', avg_recon_all_loss)
+        #         self.log('val_recon_B_loss', avg_recon_B_loss)
+        #     else:
+        #         avg_recon_loss = torch.stack([x["val_recon_loss"] for x in outputs]).mean()
+        #         self.log("val_recon_loss", avg_recon_loss)
+        # elif self.ae_net == 'vae':
+        #     avg_recon_all_loss = torch.stack([x["val_recon_all_loss"] for x in outputs]).mean()
+        #     avg_kl_loss = torch.stack([x["val_kl_loss"] for x in outputs]).mean()
+        #     self.log("val_recon_all_loss", avg_recon_all_loss)
+        #     self.log("val_kl_loss", avg_kl_loss)
 
-            if self.mask_A:
-                avg_recon_A_loss = torch.stack([x["val_recon_A_loss"] for x in outputs]).mean()
-                avg_kl_A_loss = torch.stack([x["val_recon_A_kl_loss"] for x in outputs]).mean()
-                self.log("val_recon_A_loss", avg_recon_A_loss)
-                self.log("val_recon_A_kl_loss", avg_kl_A_loss)
-            elif self.mask_B:
-                avg_recon_B_kl_loss = torch.stack([x["val_recon_B_kl_loss"] for x in outputs]).mean()
-                avg_recon_B_loss = torch.stack([x["val_recon_B_loss"] for x in outputs]).mean()
-                self.log("val_recon_B_kl_loss", avg_recon_B_kl_loss)
-                self.log("val_recon_B_loss", avg_recon_B_loss)
+        #     if self.mask_A:
+        #         avg_recon_A_loss = torch.stack([x["val_recon_A_loss"] for x in outputs]).mean()
+        #         avg_kl_A_loss = torch.stack([x["val_recon_A_kl_loss"] for x in outputs]).mean()
+        #         self.log("val_recon_A_loss", avg_recon_A_loss)
+        #         self.log("val_recon_A_kl_loss", avg_kl_A_loss)
+        #     elif self.mask_B:
+        #         avg_recon_B_kl_loss = torch.stack([x["val_recon_B_kl_loss"] for x in outputs]).mean()
+        #         avg_recon_B_loss = torch.stack([x["val_recon_B_loss"] for x in outputs]).mean()
+        #         self.log("val_recon_B_kl_loss", avg_recon_B_kl_loss)
+        #         self.log("val_recon_B_loss", avg_recon_B_loss)
         
-        if self.cont_loss != "none":
-            if self.cont_loss == "clip":
-                avg_cont_loss_A = torch.stack([x["val_cont_loss_A"] for x in outputs]).mean()
-                avg_cont_loss_B = torch.stack([x["val_cont_loss_B"] for x in outputs]).mean()
-                avg_cont_loss_C = torch.stack([x["val_cont_loss_C"] for x in outputs]).mean()
-                self.log("val_cont_loss_A", avg_cont_loss_A)
-                self.log("val_cont_loss_B", avg_cont_loss_B)
-                self.log("val_cont_loss_C", avg_cont_loss_C)
-            elif self.cont_loss == "barlowtwins":
-                avg_cont_loss_on_diag = torch.stack([x["val_cont_loss_on_diag"] for x in outputs]).mean()
-                avg_cont_loss_off_diag = torch.stack([x["val_cont_loss_off_diag"] for x in outputs]).mean()
-                self.log("val_cont_loss_on_diag", avg_cont_loss_on_diag)
-                self.log("val_cont_loss_off_diag", avg_cont_loss_off_diag)
-            elif self.cont_loss == "simclr":
-                avg_cont_loss_num = torch.stack([x["val_cont_loss_num"] for x in outputs]).mean()
-                avg_cont_loss_den = torch.stack([x["val_cont_loss_den"] for x in outputs]).mean()
-                self.log("val_cont_loss_num", avg_cont_loss_num)
-                self.log("val_cont_loss_den", avg_cont_loss_den)
-            avg_cont_loss = torch.stack([x["val_cont_loss"] for x in outputs]).mean()
-            avg_pretext_loss = torch.stack([x["val_pretext_loss"] for x in outputs]).mean()
-            self.log("val_cont_loss", avg_cont_loss)
-            self.log("val_pretext_loss", avg_pretext_loss)
+        # if self.cont_loss != "none":
+        #     if self.cont_loss == "clip":
+        #         avg_cont_loss_A = torch.stack([x["val_cont_loss_A"] for x in outputs]).mean()
+        #         avg_cont_loss_B = torch.stack([x["val_cont_loss_B"] for x in outputs]).mean()
+        #         avg_cont_loss_C = torch.stack([x["val_cont_loss_C"] for x in outputs]).mean()
+        #         self.log("val_cont_loss_A", avg_cont_loss_A)
+        #         self.log("val_cont_loss_B", avg_cont_loss_B)
+        #         self.log("val_cont_loss_C", avg_cont_loss_C)
+        #     elif self.cont_loss == "barlowtwins":
+        #         avg_cont_loss_on_diag = torch.stack([x["val_cont_loss_on_diag"] for x in outputs]).mean()
+        #         avg_cont_loss_off_diag = torch.stack([x["val_cont_loss_off_diag"] for x in outputs]).mean()
+        #         self.log("val_cont_loss_on_diag", avg_cont_loss_on_diag)
+        #         self.log("val_cont_loss_off_diag", avg_cont_loss_off_diag)
+        #     elif self.cont_loss == "simclr":
+        #         avg_cont_loss_num = torch.stack([x["val_cont_loss_num"] for x in outputs]).mean()
+        #         avg_cont_loss_den = torch.stack([x["val_cont_loss_den"] for x in outputs]).mean()
+        #         self.log("val_cont_loss_num", avg_cont_loss_num)
+        #         self.log("val_cont_loss_den", avg_cont_loss_den)
+        #     avg_cont_loss = torch.stack([x["val_cont_loss"] for x in outputs]).mean()
+        #     avg_pretext_loss = torch.stack([x["val_pretext_loss"] for x in outputs]).mean()
+        #     self.log("val_cont_loss", avg_cont_loss)
+        #     self.log("val_pretext_loss", avg_pretext_loss)
 
 
 class DownstreamModel(pl.LightningModule):
@@ -678,9 +678,9 @@ class DownstreamModel(pl.LightningModule):
         x_A, x_B, x_C = batch['x']
         surv_T, surv_E, y_true = batch['survival']
         y_out = self.forward((x_A, x_B, x_C))
-        if self.param.survival_loss == 'MTLR':
+        if self.survival_loss == 'MTLR':
             down_loss = MTLR_survival_loss(y_out, y_true, surv_E, self.tri_matrix_1)
-        predict = self.predict_risk()
+        predict = self.predict_risk(y_out)
         survival = predict['survival']
         risk = predict['risk']
         return {
@@ -795,14 +795,14 @@ class DownstreamModel(pl.LightningModule):
             ones_matrix = torch.ones(self.time_num, self.time_num + 1, device=self.device)
         else:
             ones_matrix = torch.ones(self.time_num + 1, self.time_num + 1, device=self.device)
-        tri_matrix = torch.tril(ones_matrix)
+        tri_matrix = torch.tril(ones_matrix).cuda()
         return tri_matrix
     
     def predict_risk(self, y_out):
         """
         Predict the density, survival and hazard function, as well as the risk score
         """
-        if self.param.survival_loss == 'MTLR':
+        if self.survival_loss == 'MTLR':
             phi = torch.exp(torch.mm(y_out, self.tri_matrix_1))
             div = torch.repeat_interleave(torch.sum(phi, 1).reshape(-1, 1), phi.shape[1], dim=1)
 
@@ -824,35 +824,3 @@ class DownstreamModel(pl.LightningModule):
 
         return time_points
     
-
-class SurvivalModel(pl.LightningModule):
-    def __init__(self, ae_model_path, **config):
-        super(SurvivalModel, self).__init__()
-        self.survival_loss = config["survival_loss"]
-    
-        
-        if self.survival_loss == 'MTLR':
-            self.tri_matrix_1 = self.get_tri_matrix(dimension_type=1)
-            self.tri_matrix_2 = self.get_tri_matrix(dimension_type=2)
-        
-        self.feature_extractor = AutoEncoder.load_from_checkpoint(ae_model_path)
-        self.sl_net = SurvivalNet(**config)
-    
-    @staticmethod
-    def add_model_specific_args(parent_parser):
-        parser = parent_parser.add_argument_group("SurvivalModel")
-        parser.add_argument('--survival_loss', type=str, default='MTLR', help='choose the survival loss')
-        parser.add_argument('--survival_T_max', type=float, default=-1, help='maximum T value for survival prediction task')
-        parser.add_argument('--time_num', type=int, default=256, help='number of time intervals in the survival model')
-        return parent_parser
-
-    def get_tri_matrix(self, dimension_type=1):
-        """
-        Get tensor of the triangular matrix
-        """
-        if dimension_type == 1:
-            ones_matrix = torch.ones(self.param.time_num, self.param.time_num + 1, device=self.device)
-        else:
-            ones_matrix = torch.ones(self.param.time_num + 1, self.param.time_num + 1, device=self.device)
-        tri_matrix = torch.tril(ones_matrix)
-        return tri_matrix
