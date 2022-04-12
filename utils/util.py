@@ -2,7 +2,7 @@ import argparse
 from pytorch_lightning import Trainer, seed_everything
 import torch
 import numpy as np
-from models.lit_models import AutoEncoder, Classifier
+from models.lit_models import AutoEncoder, DownstreamModel
 import pytorch_lightning.loggers as pl_loggers
 from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
 import os
@@ -24,8 +24,6 @@ def parse_arguments():
                             help="number of folds for k-fold cross validation if one_fold is set to False")
     parser.add_argument("--class_0_weight", type=float, default=0.5, 
                             help="weight of class 0 in the loss function")   
-    parser.add_argument("--downstream_task", type=str, default='ctc', 
-                            help='options: ctc (cancer type classification), sa (survival analysis)')
     
     # trainer related arguments
     parser.add_argument("--exp_name", type=str, default="test")
@@ -36,7 +34,7 @@ def parse_arguments():
     
     parser = ABCDataModule.add_data_module_args(parser)
     parser = AutoEncoder.add_model_specific_args(parser)
-    parser = Classifier.add_model_specific_args(parser)
+    parser = DownstreamModel.add_model_specific_args(parser)
 
     # add all the available trainer options to argparse
     # ie: now --gpus --num_nodes ... --fast_dev_run all work in the cli

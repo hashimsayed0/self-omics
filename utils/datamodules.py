@@ -9,6 +9,7 @@ from .datasets import ABCDataset
 from torch.utils.data import DataLoader
 from sklearn.utils import class_weight
 from .preprocessing import select_features
+import torch
 
 class ABCDataModule(LightningDataModule):
     def __init__(self, current_fold, num_folds, seed, data_dir, use_sample_list, batch_size, val_ratio, num_workers, split_A, split_B, feature_selection, feature_selection_alpha, feature_selection_percentile, **config):
@@ -26,6 +27,10 @@ class ABCDataModule(LightningDataModule):
         self.feature_selection = feature_selection
         self.feature_selection_alpha = feature_selection_alpha
         self.feature_selection_percentile = feature_selection_percentile
+        self.ds_task = config['ds_task']
+        self.survival_loss = config['survival_loss']
+        self.survival_T_max = config['survival_T_max']
+        self.time_num = config['time_num']
         # self.save_hyperparameters()
         self.load_data()
         self.preprocess_data()
@@ -78,6 +83,16 @@ class ABCDataModule(LightningDataModule):
         self.labels = pd.read_csv(labels_path, sep='\t', header=0, index_col=0)
         self.labels = self.labels.loc[sample_list]
 
+        if self.ds_task == 'surv':
+            survival_path = os.path.join(self.data_dir, 'survival.tsv')   # get the path of the survival data
+            survival_df = pd.read_csv(survival_path, sep='\t', header=0, index_col=0).loc[sample_list, :]
+            self.survival_T_array = survival_df.iloc[:, -2].astype(float).values
+            self.survival_E_array = survival_df.iloc[:, -1].values
+            self.survival_T_max = self.survival_T_array.max()
+            self.survival_T_min = self.survival_T_array.min()
+            if self.survival_loss == 'MTLR':
+                self.y_true_tensor = self.get_survival_y_true(self.survival_T_array, self.survival_E_array)
+
     def preprocess_data(self):
         kf = StratifiedKFold(n_splits=self.num_folds, shuffle=True, random_state=self.seed)
         for i, (train_index, test_index) in enumerate(kf.split(self.C_df.T, self.labels)):
@@ -110,6 +125,47 @@ class ABCDataModule(LightningDataModule):
         samples = np.load(samples_path, allow_pickle=True)
         df = pd.DataFrame(data=values, index=features, columns=samples)
         return df
+    
+
+    def get_survival_y_true(self, T, E):
+        """
+        Get y_true for survival prediction based on T and E
+        """
+        # Get T_max
+        if self.survival_T_max == -1:
+            T_max = T.max()
+        else:
+            T_max = self.survival_T_max
+
+        # Get time points
+        time_points = self.get_time_points(T_max)
+
+        # Get the y_true
+        y_true = []
+        for i, (t, e) in enumerate(zip(T, E)):
+            y_true_i = np.zeros(self.time_num + 1)
+            dist_to_time_points = [abs(t - point) for point in time_points[:-1]]
+            time_index = np.argmin(dist_to_time_points)
+            # if this is a uncensored data point
+            if e == 1:
+                y_true_i[time_index] = 1
+                y_true.append(y_true_i)
+            # if this is a censored data point
+            else:
+                y_true_i[time_index:] = 1
+                y_true.append(y_true_i)
+        y_true = torch.Tensor(np.array(y_true))
+
+        return y_true
+
+    def get_time_points(self, T_max, extra_time_percent=0.1):
+        """
+        Get time points for the MTLR model
+        """
+        # Get time points in the time axis
+        time_points = np.linspace(0, T_max * (1 + extra_time_percent), self.time_num + 1)
+
+        return time_points
 
     def separate_B(self, B_df_single):
         """
@@ -172,11 +228,11 @@ class ABCDataModule(LightningDataModule):
 
     def setup(self, stage = None):
         if stage == "fit" or stage is None:
-            self.trainset = ABCDataset(self.A_df, self.B_df, self.C_df, self.labels, self.train_index, self.split_A, self.split_B)
-            self.valset = ABCDataset(self.A_df, self.B_df, self.C_df, self.labels, self.val_index, self.split_A, self.split_B)
+            self.trainset = ABCDataset(self.A_df, self.B_df, self.C_df, self.train_index, self.split_A, self.split_B, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor)
+            self.valset = ABCDataset(self.A_df, self.B_df, self.C_df, self.val_index, self.split_A, self.split_B, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor)
         
         if stage == "test" or stage is None:
-            self.testset = ABCDataset(self.A_df, self.B_df, self.C_df, self.labels, self.test_index, self.split_A, self.split_B)
+            self.testset = ABCDataset(self.A_df, self.B_df, self.C_df, self.test_index, self.split_A, self.split_B, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor)
     
     def train_dataloader(self):
         return DataLoader(self.trainset, batch_size=self.batch_size, num_workers=self.num_workers)

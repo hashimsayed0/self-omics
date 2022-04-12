@@ -34,7 +34,7 @@ for fold in range(param.num_folds):
         wandb.finish()
         
     early_stopping, model_checkpoint, wandb_logger, csv_logger = util.define_callbacks_loggers_downstream(param, checkpoint_path, fold)
-    classifier = lit_models.Classifier(ae_model_path, abc_dm.class_weights, **vars(param))
+    classifier = lit_models.DownstreamModel(ae_model_path, abc_dm.class_weights, **vars(param))
     classifier_trainer = Trainer.from_argparse_args(param, callbacks=[early_stopping, model_checkpoint], logger=[csv_logger, wandb_logger])
     classifier_trainer.fit(classifier, abc_dm)
     classifier_trainer.test(datamodule=abc_dm, ckpt_path='best')

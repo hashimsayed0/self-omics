@@ -8,11 +8,11 @@ import os
 import torch
 
 class ABCDataset(Dataset):
-    def __init__(self, A_df, B_df, C_df, labels, indices, split_A, split_B):
+    def __init__(self, A_df, B_df, C_df, indices, split_A, split_B, labels = None, survival_T_array = None, survival_E_array = None, y_true_tensor = None):
         super().__init__()
         self.split_A = split_A
         self.split_B = split_B
-        self.indeces = indices
+        self.indices = indices
 
         if self.split_A:
             A_df = [A_df[ch].iloc[:, indices] for ch in range(len(A_df))]
@@ -28,13 +28,22 @@ class ABCDataset(Dataset):
         
         C_df = C_df.iloc[:, indices]
         self.C_tensors = torch.tensor(C_df.values.astype(float)).float()
-        labels = labels.iloc[indices]
-        self.label_tensors = torch.tensor(labels.values.astype(float)).float()
+
+        if survival_T_array is not None:
+            self.survival_T_array = survival_T_array[indices]
+            self.survival_E_array = survival_E_array[indices]
+            self.y_true_tensor = y_true_tensor[indices]
+            self.ds_task = 'surv'
+        else:
+            labels = labels.iloc[indices]
+            self.label_tensors = torch.tensor(labels.values.astype(float)).float()
+            self.ds_task = 'class'
     
     def __len__(self):
         return len(self.indices)
     
     def __getitem__(self, idx):
+        data_dict = {}
         if self.split_A:
             A_sample = [self.A_tensors[ch][:, idx] for ch in range(len(self.A_tensors))]
         else:
@@ -44,6 +53,18 @@ class ABCDataset(Dataset):
         else:
             B_sample = self.B_tensors[:, idx]
         C_sample = self.C_tensors[:, idx]
-        label = self.label_tensors[idx,:]
-        return A_sample, B_sample, C_sample, label
+
+        data_dict['x'] = (A_sample, B_sample, C_sample)
+
+        if self.ds_task == 'class':
+            label = self.label_tensors[idx,:]
+            data_dict['y'] = label
+
+        elif self.ds_task == 'surv':
+            survival_T = self.survival_T_array[idx]
+            survival_E = self.survival_E_array[idx]
+            y_true = self.y_true_tensor[idx]
+            data_dict['survival'] = (survival_T, survival_E, y_true)
+
+        return data_dict        
         
