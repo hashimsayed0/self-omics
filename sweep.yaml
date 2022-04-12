@@ -1,6 +1,6 @@
-name: A_masked
+name: A_masked_recon_all_surv
 program: train.py
-method: random
+method: grid
 parameters:
   use_sample_list:
     value: "True"
@@ -33,6 +33,7 @@ parameters:
   latent_size:
     values:
       - "128"
+      - "256"
   batch_size:
     values:
       - "512"
@@ -72,9 +73,11 @@ parameters:
   ae_net:
     values:
       - "ae"
-      - "vae"
   data_dir:
     values: 
-      - "./data/ABC_inter/Unnormalized"
       - "./data/ABC_inter/Normalized"
+  ds_task:
+    value: "surv"
+  recon_all:
+    value: "True"
   
