@@ -1,4 +1,4 @@
-name: recon
+name: recon_ae
 program: train.py
 method: grid
 parameters:
@@ -81,8 +81,4 @@ parameters:
     value: "class"
   recon_all:
     value: "True"
-  ae_net:
-    values:
-      - "ae"
-      - "vae"
   
