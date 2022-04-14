@@ -3,6 +3,7 @@ data/
 anno/
 checkpoints/
 wandb
+images
 
 
 # Byte-compiled / optimized / DLL files

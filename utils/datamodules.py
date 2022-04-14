@@ -83,6 +83,14 @@ class ABCDataModule(LightningDataModule):
         self.labels = pd.read_csv(labels_path, sep='\t', header=0, index_col=0)
         self.labels = self.labels.loc[sample_list]
 
+        tumour_index_path = os.path.join(self.data_dir, 'tumour_index.csv')
+        self.tumour_index = pd.read_csv(tumour_index_path, index_col=0)
+        self.classes = self.tumour_index['Tumour type']
+
+        self.survival_T_array = None
+        self.survival_E_array = None
+        self.y_true_tensor = None
+
         if self.ds_task == 'surv':
             survival_path = os.path.join(self.data_dir, 'survival.tsv')   # get the path of the survival data
             survival_df = pd.read_csv(survival_path, sep='\t', header=0, index_col=0).loc[sample_list, :]
@@ -231,7 +239,7 @@ class ABCDataModule(LightningDataModule):
             self.trainset = ABCDataset(self.A_df, self.B_df, self.C_df, self.train_index, self.split_A, self.split_B, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor)
             self.valset = ABCDataset(self.A_df, self.B_df, self.C_df, self.val_index, self.split_A, self.split_B, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor)
         
-        if stage == "test" or stage is None:
+        if stage == "test" or stage is None or stage == "predict":
             self.testset = ABCDataset(self.A_df, self.B_df, self.C_df, self.test_index, self.split_A, self.split_B, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor)
     
     def train_dataloader(self):
@@ -241,4 +249,7 @@ class ABCDataModule(LightningDataModule):
         return DataLoader(self.valset, batch_size=self.batch_size, num_workers=self.num_workers)
     
     def test_dataloader(self):
+        return DataLoader(self.testset, batch_size=self.batch_size, num_workers=self.num_workers)
+    
+    def predict_dataloader(self):
         return DataLoader(self.testset, batch_size=self.batch_size, num_workers=self.num_workers)

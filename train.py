@@ -1,12 +1,13 @@
-from cProfile import label
 import numpy as np
 import pandas as pd
+import seaborn as sn
 import os
-
+from sklearn.metrics import confusion_matrix
 from wandb import wandb
 from utils import util, datamodules
 from models import lit_models
 from pytorch_lightning import Trainer
+import matplotlib.pyplot as plt
 
 
 param = util.parse_arguments()
@@ -38,6 +39,3 @@ for fold in range(param.num_folds):
     classifier_trainer = Trainer.from_argparse_args(param, callbacks=[early_stopping, model_checkpoint], logger=[csv_logger, wandb_logger])
     classifier_trainer.fit(classifier, abc_dm)
     classifier_trainer.test(datamodule=abc_dm, ckpt_path='best')
-    wandb.finish()
-
-    del abc_dm

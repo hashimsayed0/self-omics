@@ -1,3 +1,4 @@
+from email.policy import default
 from pickletools import optimize
 from pl_bolts import optimizers
 import pytorch_lightning as pl
@@ -72,11 +73,13 @@ class AutoEncoder(pl.LightningModule):
             elif cont_loss == "barlowtwins":
                 self.cont_criterion = BarlowTwinsLoss(lambd=cont_loss_lambda, latent_size=latent_size, proj_size=projection_size)
         
-        if mask_B:
-            self.mask_B_ids = np.random.randint(0, len(input_size_B), size=num_mask_B)
-        if mask_A:
-            self.mask_A_ids = np.random.randint(0, len(input_size_A), size=num_mask_A)
+        if self.mask_B:
+            self.mask_B_ids = np.random.randint(0, len(self.input_size_B), size=self.num_mask_B)
+        if self.mask_A:
+            self.mask_A_ids = np.random.randint(0, len(self.input_size_A), size=self.num_mask_A)
         
+        self.change_masks_every_epoch = config['change_masks_every_epoch']
+
         self.save_hyperparameters()
 
     @staticmethod
@@ -123,6 +126,8 @@ class AutoEncoder(pl.LightningModule):
                                 help='number of chromosomes of B to mask')
         parser.add_argument('--masking_method', type=str, default='zero',
                                 help='method to mask data, can be "zero" or "noise"')
+        parser.add_argument('--change_masks_every_epoch', default=False, type=lambda x: (str(x).lower() == 'true'),
+                                help='if True, the chromosomes to mask are changed each epoch')
         parser.add_argument('--recon_all', default=False, type=lambda x: (str(x).lower() == 'true'),
                                 help='if True, modalities A, B and C will be reconstructed with higher weightage to masked modality, else, only the masked modality will be reconstructed')
         return parent_parser
@@ -168,6 +173,14 @@ class AutoEncoder(pl.LightningModule):
     def eval(self):
         super().eval()
         self.mode = "val"
+    
+    def on_train_epoch_start(self):
+        super().on_train_epoch_start()
+        if self.change_masks_every_epoch:
+            if self.mask_B:
+                self.mask_B_ids = np.random.randint(0, len(self.input_size_B), size=self.num_mask_B)
+            if self.mask_A:
+                self.mask_A_ids = np.random.randint(0, len(self.input_size_A), size=self.num_mask_A)
 
     def mask_x(self, x, mask_ids):
         x_masked = []
@@ -341,234 +354,11 @@ class AutoEncoder(pl.LightningModule):
         else:
             return logs
 
-        if self.ae_net == 'ae':
-            x_A, x_B, x_C, _ = batch
-            if self.mask_A:
-                x_A_masked = []
-                for i in range(len(x_A)):
-                    x_A_masked.append(x_A[i])
-                    if i in self.mask_A_ids:
-                        if self.masking_method == 'zero':
-                            x_A_masked[-1] = torch.zeros_like(x_A_masked[-1])
-                        elif self.masking_method == 'noise':
-                            x_A_masked[-1] = x_A_masked[-1] + torch.randn_like(x_A_masked[-1])
-                h_A, h_B, h_C = self.net.encode((x_A_masked, x_B, x_C))
-                x_A_recon, x_B_recon, x_C_recon = self.net.decode((h_A, h_B, h_C))
-                x_A_recon_loss = []
-                for i in range(len(x_A)):
-                    x_A_recon_loss.append(F.mse_loss(x_A_recon[i], x_A[i]))
-                recon_A_loss = sum(x_A_recon_loss)
-                if self.split_B:
-                    x_B_recon_loss = []
-                    for i in range(len(x_B)):
-                        x_B_recon_loss.append(F.mse_loss(x_B_recon[i], x_B[i]))
-                    recon_B_loss = sum(x_B_recon_loss)
-                recon_loss_all = recon_A_loss + recon_B_loss + F.mse_loss(x_C_recon, x_C)
-                if self.recon_all:
-                    recon_loss_all = 0.5 * recon_A_loss + 0.25 * recon_B_loss + 0.25 * F.mse_loss(x_C_recon, x_C)
-                    recon_loss = recon_loss_all
-                else:
-                    recon_loss = recon_A_loss
-                logs = {
-                    'val_recon_all_loss': recon_loss_all,
-                    'val_recon_A_loss': recon_A_loss
-                }
-            elif self.mask_B:
-                x_B_masked = []
-                for i in range(len(x_B)):
-                    x_B_masked.append(x_B[i])
-                    if i in self.mask_B_ids:
-                        if self.masking_method == 'zero':
-                            x_B_masked[-1] = torch.zeros_like(x_B_masked[-1])
-                        elif self.masking_method == 'noise':
-                            x_B_masked[-1] = x_B_masked[-1] + torch.randn_like(x_B_masked[-1])
-                
-                h_A, h_B, h_C = self.net.encode((x_A, x_B_masked, x_C))
-                x_A_recon, x_B_recon, x_C_recon = self.net.decode((h_A, h_B, h_C))
-                x_B_recon_loss = []
-                for i in range(len(x_B)):
-                    x_B_recon_loss.append(F.mse_loss(x_B_recon[i], x_B[i]))
-                recon_B_loss = sum(x_B_recon_loss)
-                recon_loss_all = F.mse_loss(x_A_recon, x_A) + recon_B_loss + F.mse_loss(x_C_recon, x_C)
-                if self.recon_all:
-                    recon_loss_all = 0.25 * F.mse_loss(x_A_recon, x_A) + 0.5 * recon_B_loss + 0.25 * F.mse_loss(x_C_recon, x_C)
-                    recon_loss = recon_loss_all
-                else:
-                    recon_loss = recon_B_loss
-                logs = {
-                    'val_recon_all_loss': recon_loss_all,
-                    'val_recon_B_loss': recon_B_loss
-                }
-            else:
-                h_A, h_B, h_C = self.net.encode((x_A, x_B, x_C))
-                x_A_recon, x_B_recon, x_C_recon = self.net.decode((h_A, h_B, h_C))
-                if self.split_B:
-                    x_B_recon_loss = []
-                    for i in range(len(x_B)):
-                        x_B_recon_loss.append(F.mse_loss(x_B_recon[i], x_B[i]))
-                    recon_loss = F.mse_loss(x_A_recon, x_A) + sum(x_B_recon_loss) + F.mse_loss(x_C_recon, x_C)    
-                logs = {'val_recon_loss': recon_loss}
-
-        elif self.ae_net == 'vae':
-            x_A, x_B, x_C, _ = batch
-            if self.mask_B:
-                x_B_masked = []
-                for i in range(len(x_B)):
-                    x_B_masked.append(x_B[i])
-                    if i in self.mask_B_ids:
-                        if self.masking_method == 'zero':
-                            x_B_masked[-1] = torch.zeros_like(x_B_masked[-1])
-                        elif self.masking_method == 'noise':
-                            x_B_masked[-1] = x_B_masked[-1] + torch.randn_like(x_B_masked[-1])
-
-                z, recon_x, mean, log_var = self.net((x_A, x_B_masked, x_C))
-                x_B_recon_loss = []
-                for i in range(len(x_B_masked)):
-                    x_B_recon_loss.append(F.mse_loss(recon_x[1][i], x_B[i]))
-                recon_B_loss = sum(x_B_recon_loss)
-                recon_loss_all = F.mse_loss(recon_x[0], x_A) + recon_B_loss + F.mse_loss(recon_x[2], x_C)
-                kl_loss = -0.5 * torch.mean(1 + log_var - mean.pow(2) - log_var.exp())
-                recon_loss = recon_B_loss + kl_loss
-                logs = {
-                    'val_recon_all_loss': recon_loss_all, 
-                    'val_kl_loss': kl_loss,
-                    'val_recon_B_kl_loss': recon_loss,
-                    'val_recon_B_loss': recon_B_loss
-                }
-
-            elif self.mask_A:
-                x_A_masked = []
-                for i in range(len(x_A)):
-                    x_A_masked.append(x_A[i])
-                    if i in self.mask_A_ids:
-                        if self.masking_method == 'zero':
-                            x_A_masked[-1] = torch.zeros_like(x_A_masked[-1])
-                        elif self.masking_method == 'noise':
-                            x_A_masked[-1] = x_A_masked[-1] + torch.randn_like(x_A_masked[-1])
-
-                z, recon_x, mean, log_var = self.net((x_A_masked, x_B, x_C))
-                x_A_recon_loss = []
-                for i in range(len(x_A_masked)):
-                    x_A_recon_loss.append(F.mse_loss(recon_x[0][i], x_A[i]))
-                recon_A_loss = sum(x_A_recon_loss)
-                x_B_recon_loss = []
-                for i in range(len(x_B)):
-                    x_B_recon_loss.append(F.mse_loss(recon_x[1][i], x_B[i]))
-                recon_B_loss = sum(x_B_recon_loss)
-                recon_loss_all = recon_A_loss + recon_B_loss + F.mse_loss(recon_x[2], x_C)
-                kl_loss = -0.5 * torch.mean(1 + log_var - mean.pow(2) - log_var.exp())
-                recon_loss = recon_A_loss + kl_loss
-                logs = {
-                    'val_recon_all_loss': recon_loss_all, 
-                    'val_kl_loss': kl_loss,
-                    'val_recon_A_kl_loss': recon_loss,
-                    'val_recon_A_loss': recon_A_loss
-                }
-        
-        if self.cont_loss != "none":
-            if self.cont_loss == "clip":
-                loss_A_B, loss_A1, loss_B1 = self.cont_criterion(h_A, h_B)
-                loss_B_C, loss_B2, loss_C1 = self.cont_criterion(h_B, h_C)
-                loss_C_A, loss_C2, loss_A2 = self.cont_criterion(h_C, h_A)
-                cont_loss = (loss_A_B + loss_B_C + loss_C_A) / 3
-                loss_A = (loss_A1 + loss_A2) / 2
-                loss_B = (loss_B1 + loss_B2) / 2
-                loss_C = (loss_C1 + loss_C2) / 2
-                logs['val_cont_loss_A'] = loss_A
-                logs['val_cont_loss_B'] = loss_B
-                logs['val_cont_loss_C'] = loss_C
-
-            elif self.cont_loss == "barlowtwins":
-                loss_A_B, loss_on_diag1, loss_off_diag1 = self.cont_criterion(h_A, h_B)
-                loss_B_C, loss_on_diag2, loss_off_diag2 = self.cont_criterion(h_B, h_C)
-                loss_C_A, loss_on_diag3, loss_off_diag3 = self.cont_criterion(h_C, h_A)
-                cont_loss = (loss_A_B + loss_B_C + loss_C_A) / 3
-                loss_on_diag = (loss_on_diag1 + loss_on_diag2 + loss_on_diag3) / 3
-                loss_off_diag = (loss_off_diag1 + loss_off_diag2 + loss_off_diag3) / 3
-                logs['val_cont_loss_on_diag'] = loss_on_diag
-                logs['val_cont_loss_off_diag'] = loss_off_diag
-            
-            elif self.cont_loss == "simclr":
-                z_A = self.projector(h_A)
-                z_B = self.projector(h_B)
-                z_C = self.projector(h_C)
-                z_AB = torch.cat((z_A, z_B), dim=0)
-                z_BC = torch.cat((z_B, z_C), dim=0)
-                z_CA = torch.cat((z_C, z_A), dim=0)
-                labels = torch.arange(z_A.shape[0]).repeat(2)
-                loss_A_B, loss_num1, loss_den1 = self.cont_criterion(z_AB, labels)
-                loss_B_C, loss_num2, loss_den2 = self.cont_criterion(z_BC, labels)
-                loss_C_A, loss_num3, loss_den3 = self.cont_criterion(z_CA, labels)
-                cont_loss = (loss_A_B + loss_B_C + loss_C_A) / 3
-                loss_num = (loss_num1 + loss_num2 + loss_num3) / 3
-                loss_den = (loss_den1 + loss_den2 + loss_den3) / 3
-                logs['val_cont_loss_num'] = loss_num
-                logs['val_cont_loss_den'] = loss_den
-
-            pretext_loss = recon_loss + self.cont_loss_weight * cont_loss
-            logs['val_cont_loss'] = cont_loss
-            logs['val_pretext_loss'] = pretext_loss
-        
-        return logs
-
     def validation_epoch_end(self, outputs):
         for key, value in outputs[0].items():
             avg = torch.stack([x[key] for x in outputs]).mean()
             self.log(key, avg)
         
-        # if self.ae_net == 'ae':
-        #     if self.mask_A:
-        #         avg_recon_all_loss = torch.stack([x['val_recon_all_loss'] for x in outputs]).mean()
-        #         avg_recon_A_loss = torch.stack([x['val_recon_A_loss'] for x in outputs]).mean()
-        #         self.log('val_recon_all_loss', avg_recon_all_loss)
-        #         self.log('val_recon_A_loss', avg_recon_A_loss)
-        #     elif self.mask_B:
-        #         avg_recon_all_loss = torch.stack([x['val_recon_all_loss'] for x in outputs]).mean()
-        #         avg_recon_B_loss = torch.stack([x['val_recon_B_loss'] for x in outputs]).mean()
-        #         self.log('val_recon_all_loss', avg_recon_all_loss)
-        #         self.log('val_recon_B_loss', avg_recon_B_loss)
-        #     else:
-        #         avg_recon_loss = torch.stack([x["val_recon_loss"] for x in outputs]).mean()
-        #         self.log("val_recon_loss", avg_recon_loss)
-        # elif self.ae_net == 'vae':
-        #     avg_recon_all_loss = torch.stack([x["val_recon_all_loss"] for x in outputs]).mean()
-        #     avg_kl_loss = torch.stack([x["val_kl_loss"] for x in outputs]).mean()
-        #     self.log("val_recon_all_loss", avg_recon_all_loss)
-        #     self.log("val_kl_loss", avg_kl_loss)
-
-        #     if self.mask_A:
-        #         avg_recon_A_loss = torch.stack([x["val_recon_A_loss"] for x in outputs]).mean()
-        #         avg_kl_A_loss = torch.stack([x["val_recon_A_kl_loss"] for x in outputs]).mean()
-        #         self.log("val_recon_A_loss", avg_recon_A_loss)
-        #         self.log("val_recon_A_kl_loss", avg_kl_A_loss)
-        #     elif self.mask_B:
-        #         avg_recon_B_kl_loss = torch.stack([x["val_recon_B_kl_loss"] for x in outputs]).mean()
-        #         avg_recon_B_loss = torch.stack([x["val_recon_B_loss"] for x in outputs]).mean()
-        #         self.log("val_recon_B_kl_loss", avg_recon_B_kl_loss)
-        #         self.log("val_recon_B_loss", avg_recon_B_loss)
-        
-        # if self.cont_loss != "none":
-        #     if self.cont_loss == "clip":
-        #         avg_cont_loss_A = torch.stack([x["val_cont_loss_A"] for x in outputs]).mean()
-        #         avg_cont_loss_B = torch.stack([x["val_cont_loss_B"] for x in outputs]).mean()
-        #         avg_cont_loss_C = torch.stack([x["val_cont_loss_C"] for x in outputs]).mean()
-        #         self.log("val_cont_loss_A", avg_cont_loss_A)
-        #         self.log("val_cont_loss_B", avg_cont_loss_B)
-        #         self.log("val_cont_loss_C", avg_cont_loss_C)
-        #     elif self.cont_loss == "barlowtwins":
-        #         avg_cont_loss_on_diag = torch.stack([x["val_cont_loss_on_diag"] for x in outputs]).mean()
-        #         avg_cont_loss_off_diag = torch.stack([x["val_cont_loss_off_diag"] for x in outputs]).mean()
-        #         self.log("val_cont_loss_on_diag", avg_cont_loss_on_diag)
-        #         self.log("val_cont_loss_off_diag", avg_cont_loss_off_diag)
-        #     elif self.cont_loss == "simclr":
-        #         avg_cont_loss_num = torch.stack([x["val_cont_loss_num"] for x in outputs]).mean()
-        #         avg_cont_loss_den = torch.stack([x["val_cont_loss_den"] for x in outputs]).mean()
-        #         self.log("val_cont_loss_num", avg_cont_loss_num)
-        #         self.log("val_cont_loss_den", avg_cont_loss_den)
-        #     avg_cont_loss = torch.stack([x["val_cont_loss"] for x in outputs]).mean()
-        #     avg_pretext_loss = torch.stack([x["val_pretext_loss"] for x in outputs]).mean()
-        #     self.log("val_cont_loss", avg_cont_loss)
-        #     self.log("val_pretext_loss", avg_pretext_loss)
 
 
 class DownstreamModel(pl.LightningModule):
@@ -588,6 +378,10 @@ class DownstreamModel(pl.LightningModule):
         self.ds_max_epochs = max_epochs
         self.ds_task = config['ds_task']
         self.feature_extractor = AutoEncoder.load_from_checkpoint(ae_model_path)
+        self.feature_extractor.freeze()
+        self.ds_latent_agg_method = config['ds_latent_agg_method']
+        if self.ds_latent_agg_method == 'concat':
+            latent_size *= 3
         if self.ds_task == 'class':
             self.ds_net = ClassifierNet(num_classes, latent_size, dropout_p=ds_drop_p)
             self.wbce = weighted_binary_cross_entropy
@@ -623,12 +417,19 @@ class DownstreamModel(pl.LightningModule):
         parser.add_argument('--survival_loss', type=str, default='MTLR', help='choose the survival loss')
         parser.add_argument('--survival_T_max', type=float, default=-1, help='maximum T value for survival prediction task')
         parser.add_argument('--time_num', type=int, default=256, help='number of time intervals in the survival model')
+        parser.add_argument('--ds_latent_agg_method', type=str, default='mean',
+                                help='method to aggregate latent representations from autoencoders of A, B and C, options: "mean", "concat", "sum"')
         return parent_parser
 
     def forward(self, x):
         if self.ae_net == 'ae':
             h_A, h_B, h_C = self.feature_extractor(x)
-            h = torch.mean(torch.stack([h_A, h_B, h_C]), axis=0)
+            if self.ds_latent_agg_method == 'concat':
+                h = torch.cat([h_A, h_B, h_C], dim=1)
+            elif self.ds_latent_agg_method == 'mean':
+                h = torch.mean(torch.stack([h_A, h_B, h_C]), axis=0)
+            elif self.ds_latent_agg_method == 'sum':
+                h = torch.sum(torch.stack([h_A, h_B, h_C]), axis=0)
         elif self.ae_net == 'vae':
             h, _, _, _ = self.feature_extractor(x)
         return self.ds_net(h)
@@ -687,9 +488,9 @@ class DownstreamModel(pl.LightningModule):
             "loss": down_loss,
             "y_true_E": surv_E.detach(),
             "y_true_T": surv_T.detach(),
-            "survival": survival,
-            "risk": risk,
-            "y_out": y_out
+            "survival": survival.detach(),
+            "risk": risk.detach(),
+            "y_out": y_out.detach()
         }
 
     def compute_class_metrics(self, outputs):
@@ -786,6 +587,38 @@ class DownstreamModel(pl.LightningModule):
             c_index, ibs = self.compute_surv_metrics(outputs)
             self.log("test_c_index", c_index)
             self.log("test_ibs", ibs)
+    
+    def predict_step(self, batch, batch_idx):
+        return self.shared_step(batch)
+
+    def on_predict_epoch_end(self, results):
+        outputs = results[0]
+        if self.ds_task == 'class':
+            y_true_binary = torch.cat([x["y_true"] for x in outputs]).cpu().numpy()
+            y_true = np.argmax(y_true_binary, axis=1)
+            y_pred = torch.cat([x["y_pred"] for x in outputs]).cpu().numpy()
+            y_prob = torch.cat([x["y_prob"] for x in outputs]).cpu().numpy()
+            preds = {
+                "y_true": y_true,
+                "y_pred": y_pred,
+                "y_prob": y_prob,
+                "y_true_binary": y_true_binary
+            }
+        
+        elif self.ds_task == "surv":
+            y_true_E = torch.cat([x["y_true_E"] for x in outputs]).cpu().numpy()
+            y_true_T = torch.cat([x["y_true_T"] for x in outputs]).cpu().numpy()
+            y_pred_risk = torch.cat([x["risk"] for x in outputs]).cpu().numpy()
+            y_pred_survival = torch.cat([x["survival"] for x in outputs]).cpu().numpy()
+            preds = {
+                "y_true_E": y_true_E,
+                "y_true_T": y_true_T,
+                "y_pred_risk": y_pred_risk,
+                "y_pred_survival": y_pred_survival
+            }
+        
+        return preds
+
     
     def get_tri_matrix(self, dimension_type=1):
         """
