@@ -63,15 +63,16 @@ class AutoEncoder(pl.LightningModule):
                 self.net = VAESepB((input_size_A, input_size_B, input_size_C), latent_size, dropout_p=ae_drop_p, dim_1B=ae_dim_1B, dim_2B=ae_dim_2B, dim_1A=ae_dim_1A, dim_2A=ae_dim_2A, dim_1C=ae_dim_1C, dim_2C=ae_dim_2C)
         
         if cont_loss != "none":
+            self.projection_size = latent_size // 2
             if cont_loss == "simclr":
-                # self.cont_criterion = SimCLR_Loss(batch_size = batch_size, temperature = cont_loss_temp, latent_size=latent_size, proj_size=projection_size)
-                self.projector = SimCLRProjectionHead(latent_size, latent_size, projection_size)
+                # self.cont_criterion = SimCLR_Loss(batch_size = batch_size, temperature = cont_loss_temp, latent_size=latent_size, proj_size=self.projection_size)
+                self.projector = SimCLRProjectionHead(latent_size, latent_size, self.projection_size)
                 self.cont_criterion = losses.NTXentLoss(temperature=cont_loss_temp)
             elif cont_loss == "clip":
-                self.projector = CLIPProjectionHead(latent_size, projection_size, ae_drop_p)
-                self.cont_criterion = CLIPLoss(temperature = cont_loss_temp, latent_size = latent_size, proj_size = projection_size)
+                self.projector = CLIPProjectionHead(latent_size, self.projection_size, ae_drop_p)
+                self.cont_criterion = CLIPLoss(temperature = cont_loss_temp, latent_size = latent_size, proj_size = self.projection_size)
             elif cont_loss == "barlowtwins":
-                self.cont_criterion = BarlowTwinsLoss(lambd=cont_loss_lambda, latent_size=latent_size, proj_size=projection_size)
+                self.cont_criterion = BarlowTwinsLoss(lambd=cont_loss_lambda, latent_size=latent_size, proj_size=self.projection_size)
         
         if self.mask_B:
             self.mask_B_ids = np.random.randint(0, len(self.input_size_B), size=self.num_mask_B)
@@ -241,7 +242,11 @@ class AutoEncoder(pl.LightningModule):
             x_A_recon, x_B_recon, x_C_recon = self.net.decode((h_A, h_B, h_C))
             if self.split_B:
                 recon_B_loss = self.sum_subset_losses(x_B_recon, x_B)
-                recon_loss = F.mse_loss(x_A_recon, x_A) + recon_B_loss + F.mse_loss(x_C_recon, x_C) 
+            if self.split_A:
+                recon_A_loss = self.sum_subset_losses(x_A_recon, x_A)
+            else:
+                recon_A_loss = F.mse_loss(x_A_recon, x_A)
+            recon_loss = recon_A_loss + recon_B_loss + F.mse_loss(x_C_recon, x_C) 
             logs["{}_recon_loss".format(self.mode)] = recon_loss
         
         return logs, (h_A, h_B, h_C), recon_loss
@@ -270,6 +275,17 @@ class AutoEncoder(pl.LightningModule):
             logs['{}_recon_A_loss'.format(self.mode)] = recon_A_loss
             logs['{}_recon_A_kl_loss'.format(self.mode)] = recon_loss
 
+        else:
+            h, recon_x, mean, log_var = self.net((x_A, x_B, x_C))
+            recon_A_loss = F.mse_loss(recon_x[0], x_A)
+            recon_B_loss = self.sum_subset_losses(recon_x[1], x_B)
+            recon_C_loss = F.mse_loss(recon_x[2], x_C)
+            recon_loss_all = recon_A_loss + recon_B_loss + recon_C_loss
+            kl_loss = -0.5 * torch.mean(1 + log_var - mean.pow(2) - log_var.exp())
+            recon_loss = recon_A_loss + recon_B_loss + recon_C_loss + kl_loss
+            logs['{}_recon_all_kl_loss'.format(self.mode)] = recon_loss
+
+            
         logs['{}_recon_all_loss'.format(self.mode)] = recon_loss_all
         logs['{}_kl_loss'.format(self.mode)] = kl_loss
 
