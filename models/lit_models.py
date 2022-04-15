@@ -95,7 +95,7 @@ class AutoEncoder(pl.LightningModule):
         parser.add_argument("--ae_weight_decay", type=float, default=1e-4)
         parser.add_argument("--ae_momentum", type=float, default=0.9)
         parser.add_argument("--ae_drop_p", type=float, default=0.2)
-        parser.add_argument("--cont_loss", type=str, default="simclr", help="contrastive loss to use, options: none, simclr, clip, barlowtwins")
+        parser.add_argument("--cont_loss", type=str, default="none", help="contrastive loss to use, options: none, simclr, clip, barlowtwins")
         parser.add_argument("--cont_loss_temp", type=float, default=0.5)
         parser.add_argument("--cont_loss_lambda", type=float, default=0.0051, help="for barlowtwins")
         parser.add_argument("--cont_loss_weight", type=float, default=0.2)
@@ -378,7 +378,8 @@ class DownstreamModel(pl.LightningModule):
         self.ds_max_epochs = max_epochs
         self.ds_task = config['ds_task']
         self.feature_extractor = AutoEncoder.load_from_checkpoint(ae_model_path)
-        self.feature_extractor.freeze()
+        if config['ds_freeze_ae'] == True:
+            self.feature_extractor.freeze()
         self.ds_latent_agg_method = config['ds_latent_agg_method']
         if self.ds_latent_agg_method == 'concat':
             latent_size *= 3
@@ -419,6 +420,8 @@ class DownstreamModel(pl.LightningModule):
         parser.add_argument('--time_num', type=int, default=256, help='number of time intervals in the survival model')
         parser.add_argument('--ds_latent_agg_method', type=str, default='mean',
                                 help='method to aggregate latent representations from autoencoders of A, B and C, options: "mean", "concat", "sum"')
+        parser.add_argument('--ds_freeze_ae', default=False, type=lambda x: (str(x).lower() == 'true'),
+                                help='whether to freeze the autoencoder for downstream model')
         return parent_parser
 
     def forward(self, x):

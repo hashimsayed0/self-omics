@@ -78,7 +78,14 @@ parameters:
     values: 
       - "./data/ABC_inter/Normalized"
   ds_task:
-    value: "class"
+    values: 
+      - "class"
+      - "surv"
   recon_all:
     value: "True"
+  ds_latent_agg_method:
+    values:
+      - "mean"
+      - "sum"
+      - "concat"
   

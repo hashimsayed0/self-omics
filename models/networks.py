@@ -338,20 +338,32 @@ class AESepAB(nn.Module):
 
         # DECODER
         # Layer 1
-        if mask_B:
-            self.decode_fc_3B = FCBlock(latent_size*3, dim_2B, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=dropout_p,
-                                        activation=False, normalization=False)
-        else:
-            self.decode_fc_3B = FCBlock(latent_size, dim_2B, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=dropout_p,
+        # if mask_B:
+        #     self.decode_fc_3B = FCBlock(latent_size*3, dim_2B, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=dropout_p,
+        #                                 activation=False, normalization=False)
+        # else:
+        #     self.decode_fc_3B = FCBlock(latent_size, dim_2B, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=dropout_p,
+        #                             activation=False, normalization=False)
+        # if mask_A:
+        #     self.decode_fc_3A = FCBlock(latent_size*3, dim_2A, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=dropout_p,
+        #                             activation=False, normalization=False)
+        # else:
+        #     self.decode_fc_3A = FCBlock(latent_size, dim_2A, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=dropout_p,
+        #                             activation=False, normalization=False)
+        # self.decode_fc_3C = FCBlock(latent_size, dim_2C, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=dropout_p,
+        #                             activation=False, normalization=False)
+        
+        if mask_A or mask_B:
+            latent_size *= 3
+
+        self.decode_fc_3B = FCBlock(latent_size, dim_2B, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=dropout_p,
                                     activation=False, normalization=False)
-        if mask_A:
-            self.decode_fc_3A = FCBlock(latent_size*3, dim_2A, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=dropout_p,
-                                    activation=False, normalization=False)
-        else:
-            self.decode_fc_3A = FCBlock(latent_size, dim_2A, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=dropout_p,
-                                    activation=False, normalization=False)
+        self.decode_fc_3A = FCBlock(latent_size, dim_2A, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=dropout_p,
+                                activation=False, normalization=False)
         self.decode_fc_3C = FCBlock(latent_size, dim_2C, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=dropout_p,
-                                    activation=False, normalization=False)
+                                activation=False, normalization=False)
+
+
 
         # Layer 2
         self.decode_fc_2B = FCBlock(dim_2B, dim_1B*23, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=dropout_p,
@@ -398,15 +410,25 @@ class AESepAB(nn.Module):
         return h_A, h_B, h_C
 
     def decode(self, h):
-        if self.mask_B:
-            level_3_B = self.decode_fc_3B(torch.cat((h[0], h[1], h[2]), 1))
+        # if self.mask_B:
+        #     level_3_B = self.decode_fc_3B(torch.cat((h[0], h[1], h[2]), 1))
+        # else:
+        #     level_3_B = self.decode_fc_3B(h[1])
+        # if self.mask_A:
+        #     level_3_A = self.decode_fc_3A(torch.cat((h[0], h[1], h[2]), 1))
+        # else:
+        #     level_3_A = self.decode_fc_3A(h[0])
+        # level_3_C = self.decode_fc_3C(h[2])
+        
+        if self.mask_A or self.mask_B:
+            z = torch.cat((h[0], h[1], h[2]), 1)
+            level_3_B = self.decode_fc_3B(z)
+            level_3_A = self.decode_fc_3A(z)
+            level_3_C = self.decode_fc_3C(z)
         else:
             level_3_B = self.decode_fc_3B(h[1])
-        if self.mask_A:
-            level_3_A = self.decode_fc_3A(torch.cat((h[0], h[1], h[2]), 1))
-        else:
             level_3_A = self.decode_fc_3A(h[0])
-        level_3_C = self.decode_fc_3C(h[2])
+            level_3_C = self.decode_fc_3C(h[2])
 
         level_2_B = self.decode_fc_2B(level_3_B)
         level_2_A = self.decode_fc_2A(level_3_A)
