@@ -36,7 +36,7 @@
                 
                 "--data_dir", "./data/ABC_inter/Normalized",
                 "--latent_size", "128",
-                "--batch_size", "32",
+                "--batch_size", "512",
                 "--exp_name", "test",
                 "--ae_net", "ae",
                 "--pretraining_patience", "20",
