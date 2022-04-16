@@ -37,6 +37,7 @@ class ABCDataset(Dataset):
         else:
             labels = labels.iloc[indices]
             self.label_tensors = torch.tensor(labels.values.astype(float)).float()
+            self.sample_ids = labels.index.to_list()
             self.ds_task = 'class'
     
     def __len__(self):
@@ -55,7 +56,8 @@ class ABCDataset(Dataset):
         C_sample = self.C_tensors[:, idx]
 
         data_dict['x'] = (A_sample, B_sample, C_sample)
-
+        data_dict['sample_id'] = self.sample_ids[idx]
+        
         if self.ds_task == 'class':
             label = self.label_tensors[idx,:]
             data_dict['y'] = label

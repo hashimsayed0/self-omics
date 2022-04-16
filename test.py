@@ -17,7 +17,7 @@ fold = 0
 dict_args = vars(param)
 abc_dm = datamodules.ABCDataModule(fold, **dict_args)
 checkpoint_path = 'checkpoints/010/fold-0'
-ae_model_path = './checkpoints/test/fold-0/pretraining/version_58/epoch=19-step=239.ckpt'
+ae_model_path = './checkpoints/mask_A_noise_ae/fold-0/pretraining/version_0/epoch=24-step=299.ckpt'
 ds_model_path = './checkpoints/test/fold-0/downstream/version_25/epoch=14-step=179.ckpt'
 
 early_stopping, model_checkpoint, wandb_logger, csv_logger = util.define_callbacks_loggers_downstream(param, checkpoint_path, fold)

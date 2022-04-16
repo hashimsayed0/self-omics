@@ -1,5 +1,6 @@
 from email.policy import default
 from pickletools import optimize
+from random import sample
 from pl_bolts import optimizers
 import pytorch_lightning as pl
 import torch
@@ -17,6 +18,8 @@ from pytorch_metric_learning import losses
 import wandb
 import numpy as np
 import utils.metrics as metrics
+import pandas as pd
+import os
 
 class AutoEncoder(pl.LightningModule):
     def __init__(self, input_size_A, input_size_B, input_size_C, ae_net, ae_weight_kl, latent_size, projection_size, ae_lr, ae_weight_decay, ae_momentum, ae_drop_p, ae_beta1, ae_lr_policy, ae_epoch_num_decay, ae_decay_step_size, max_epochs, cont_loss, cont_loss_temp, cont_loss_lambda, ae_optimizer, ae_use_lrscheduler, cont_loss_weight, split_A, split_B, mask_A, mask_B, num_mask_A, num_mask_B, masking_method, recon_all, batch_size, ae_dim_1B, ae_dim_2B, ae_dim_1A, ae_dim_2A, ae_dim_1C, ae_dim_2C, **config):
@@ -378,7 +381,7 @@ class AutoEncoder(pl.LightningModule):
 
 
 class DownstreamModel(pl.LightningModule):
-    def __init__(self, ae_model_path, class_weights, num_classes, ae_net, latent_size, ds_lr, ds_weight_decay, ds_beta1, ds_drop_p, cl_loss, ds_lr_policy, ds_epoch_num_decay, ds_decay_step_size, max_epochs, **config):
+    def __init__(self, ae_model_path, class_weights, checkpoint_path, num_classes, ae_net, latent_size, ds_lr, ds_weight_decay, ds_beta1, ds_drop_p, cl_loss, ds_lr_policy, ds_epoch_num_decay, ds_decay_step_size, max_epochs, **config):
         super(DownstreamModel, self).__init__()
         self.input_size = latent_size
         self.ds_drop_p = ds_drop_p
@@ -393,6 +396,8 @@ class DownstreamModel(pl.LightningModule):
         self.ae_net = ae_net
         self.ds_max_epochs = max_epochs
         self.ds_task = config['ds_task']
+        self.ds_save_latent_testing = config['ds_save_latent_testing']
+        self.checkpoint_path = checkpoint_path
         self.feature_extractor = AutoEncoder.load_from_checkpoint(ae_model_path)
         if config['ds_freeze_ae'] == True:
             self.feature_extractor.freeze()
@@ -438,6 +443,8 @@ class DownstreamModel(pl.LightningModule):
                                 help='method to aggregate latent representations from autoencoders of A, B and C, options: "mean", "concat", "sum"')
         parser.add_argument('--ds_freeze_ae', default=False, type=lambda x: (str(x).lower() == 'true'),
                                 help='whether to freeze the autoencoder for downstream model')
+        parser.add_argument('--ds_save_latent_testing', default=False, type=lambda x: (str(x).lower() == 'true'),
+                                help='whether to save the latent representations of testing data')
         return parent_parser
 
     def forward(self, x):
@@ -451,7 +458,7 @@ class DownstreamModel(pl.LightningModule):
                 h = torch.sum(torch.stack([h_A, h_B, h_C]), axis=0)
         elif self.ae_net == 'vae':
             h, _, _, _ = self.feature_extractor(x)
-        return self.ds_net(h)
+        return h, self.ds_net(h)
 
     def configure_optimizers(self):
         optimizer =  optim.Adam(self.parameters(), lr=self.ds_lr, weight_decay=self.ds_weight_decay, betas=(self.ds_beta1, 0.999))
@@ -479,7 +486,8 @@ class DownstreamModel(pl.LightningModule):
     def class_step(self, batch):
         x_A, x_B, x_C = batch['x']
         y = batch['y']
-        y_out = self.forward((x_A, x_B, x_C))
+        sample_ids = batch['sample_id']
+        h, y_out = self.forward((x_A, x_B, x_C))
         if self.cl_loss == "wbce":
             down_loss = self.wbce(y_out, y, self.class_weights)
         elif self.cl_loss == "bce":
@@ -489,15 +497,18 @@ class DownstreamModel(pl.LightningModule):
         _, y_pred = torch.max(y_prob, 1)
         return {
             "loss": down_loss,
-            "y_true": y_true.detach(),
+            "sample_ids": sample_ids,
+            "h": h.detach(),
+            "y_true": y_true,
             "y_pred": y_pred.detach(),
             "y_prob": y_prob.detach()
         }
     
     def surv_step(self, batch):
         x_A, x_B, x_C = batch['x']
+        sample_ids = batch['sample_id']
         surv_T, surv_E, y_true = batch['survival']
-        y_out = self.forward((x_A, x_B, x_C))
+        h, y_out = self.forward((x_A, x_B, x_C))
         if self.survival_loss == 'MTLR':
             down_loss = MTLR_survival_loss(y_out, y_true, surv_E, self.tri_matrix_1)
         predict = self.predict_risk(y_out)
@@ -505,6 +516,8 @@ class DownstreamModel(pl.LightningModule):
         risk = predict['risk']
         return {
             "loss": down_loss,
+            "sample_ids": sample_ids,
+            "h": h.detach(),
             "y_true_E": surv_E.detach(),
             "y_true_T": surv_T.detach(),
             "survival": survival.detach(),
@@ -606,6 +619,13 @@ class DownstreamModel(pl.LightningModule):
             c_index, ibs = self.compute_surv_metrics(outputs)
             self.log("test_c_index", c_index)
             self.log("test_ibs", ibs)
+        if self.ds_save_latent_testing:
+            sample_ids_list = []
+            for x in outputs:
+                sample_ids_list.extend(x["sample_ids"])
+            h_concat = torch.cat([x["h"] for x in outputs]).cpu().numpy()
+            latent_space = pd.DataFrame(h_concat, index=sample_ids_list)
+            latent_space.to_csv(os.path.join(self.checkpoint_path, 'latent_space.tsv'), sep='\t')
     
     def predict_step(self, batch, batch_idx):
         return self.shared_step(batch)

@@ -79,7 +79,7 @@ def define_callbacks_loggers_pretraining(param, checkpoint_path, count):
     csv_logger = pl_loggers.CSVLogger(checkpoint_path, name='pretraining')
     early_stopping = EarlyStopping(callback_key, patience=param.pretraining_patience)
     model_checkpoint = ModelCheckpoint(csv_logger.log_dir, monitor=callback_key, mode='min', save_top_k=1)
-    wandb_logger = pl_loggers.WandbLogger(project = 'tcga_contrastive', group = '{}-pretraining'.format(param.exp_name), name = 'fold-{f}-v{v}'.format(f=count, v=csv_logger.version), offline=False)
+    wandb_logger = pl_loggers.WandbLogger(project = 'tcga_contrastive', group = '{}'.format(param.exp_name), name = 'fold-{f}-v{v}'.format(f=count, v=csv_logger.version), offline=False)
     return early_stopping, model_checkpoint, wandb_logger, csv_logger
 
 
@@ -92,6 +92,7 @@ def define_callbacks_loggers_downstream(param, checkpoint_path, count):
     csv_logger = pl_loggers.CSVLogger(checkpoint_path, name='downstream')
     early_stopping = EarlyStopping('val_down_loss', patience=param.downstream_patience)
     model_checkpoint = ModelCheckpoint(csv_logger.log_dir, monitor=callback_key, mode='max', save_top_k=1)
-    wandb_logger = pl_loggers.WandbLogger(project = 'tcga_contrastive', group = '{}-downstream'.format(param.exp_name), name = 'fold-{f}-v{v}'.format(f=count, v=csv_logger.version), offline=False)
-    return early_stopping, model_checkpoint, wandb_logger, csv_logger
+    # wandb_logger = pl_loggers.WandbLogger(project = 'tcga_contrastive', group = '{}-downstream'.format(param.exp_name), name = 'fold-{f}-v{v}'.format(f=count, v=csv_logger.version), offline=False)
+    # return early_stopping, model_checkpoint, wandb_logger, csv_logger
+    return early_stopping, model_checkpoint, csv_logger
 
