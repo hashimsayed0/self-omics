@@ -1,6 +1,9 @@
 name: mask_cont
 program: train.py
-method: random
+method: bayes
+metric:
+  name: test_accuracy
+  goal: maximize
 parameters:
   use_sample_list:
     value: "True"
@@ -36,12 +39,8 @@ parameters:
   batch_size:
     values:
       - "512"
-  cont_loss:
-    values:
-      - "none"
   ae_use_lrscheduler:
     values:
-      - "True"
       - "False"
   mask_A:
     values:
@@ -51,6 +50,10 @@ parameters:
       - "8"
       - "16"
       - "23"
+  masking_method:
+    values:
+      - "zero"
+      - "noise"
   # mask_B:
   #   values:
   #     - "True"
@@ -60,10 +63,6 @@ parameters:
   #     - "12"
   #     - "18"
   #     - "23"
-  # masking_method:
-  #   values:
-  #     - "zero"
-  #     - "noise"
   cl_loss:
     values:
       - "bce"
@@ -75,10 +74,10 @@ parameters:
   data_dir:
     values: 
       - "./data/ABC_inter/Normalized"
+      - "./data/ABC_inter/Unnormalized"
   ds_task:
     values: 
       - "class"
-      - "surv"
   recon_all:
     value: "True"
   ds_latent_agg_method:
@@ -100,6 +99,10 @@ parameters:
   ae_drop_p:
     values:
       - "0.2"
+      - "0.0"
+  ds_drop_p:
+    values:
+      - "0.2"
       - "0.5"
-      - "0.8"
+      - "0.0"
   
