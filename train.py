@@ -32,7 +32,7 @@ for fold in range(param.num_folds):
         ae_trainer = Trainer.from_argparse_args(param, callbacks=[early_stopping, model_checkpoint], logger=[csv_logger, wandb_logger])
         ae_trainer.fit(ae, abc_dm)
         ae_model_path = model_checkpoint.best_model_path
-        wandb.finish()
+        # wandb.finish()
         
     early_stopping, model_checkpoint, csv_logger = util.define_callbacks_loggers_downstream(param, checkpoint_path, fold)
     classifier = lit_models.DownstreamModel(ae_model_path, abc_dm.class_weights, checkpoint_path, **vars(param))

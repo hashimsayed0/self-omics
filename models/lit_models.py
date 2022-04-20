@@ -100,9 +100,9 @@ class AutoEncoder(pl.LightningModule):
         parser.add_argument("--ae_momentum", type=float, default=0.9)
         parser.add_argument("--ae_drop_p", type=float, default=0.2)
         parser.add_argument("--cont_loss", type=str, default="none", help="contrastive loss to use, options: none, simclr, clip, barlowtwins")
-        parser.add_argument("--cont_loss_temp", type=float, default=0.5)
+        parser.add_argument("--cont_loss_temp", type=float, default=0.1)
         parser.add_argument("--cont_loss_lambda", type=float, default=0.0051, help="for barlowtwins")
-        parser.add_argument("--cont_loss_weight", type=float, default=0.2)
+        parser.add_argument("--cont_loss_weight", type=float, default=0.5)
         parser.add_argument("--ae_optimizer", type=str, default="adam", help="optimizer to use, options: adam, lars")
         parser.add_argument("--ae_use_lrscheduler", default=False, type=lambda x: (str(x).lower() == 'true'))
         parser.add_argument("--ae_beta1", type=float, default=0.5)
@@ -151,7 +151,8 @@ class AutoEncoder(pl.LightningModule):
             lr_scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer,
                                                             T_max=500,
                                                             eta_min=self.hparams.ae_lr/50)
-        return [optimizer], [lr_scheduler]
+            return [optimizer], [lr_scheduler]
+        return optimizer
 
         # optimizer =  optim.Adam(self.parameters(), lr=self.ae_lr, weight_decay=self.ae_weight_decay, betas=(self.ae_beta1, 0.999))
         # if self.ae_lr_policy == 'linear':
