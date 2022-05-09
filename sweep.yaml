@@ -1,6 +1,6 @@
-name: maskB_dsmaskB_augB
+name: use_one_decoder
 program: train.py
-method: bayes
+method: grid
 metric:
   name: test_accuracy
   goal: maximize
@@ -20,11 +20,14 @@ parameters:
       - "-1"
   exp_name:
     values:
-      - "maskB_dsmaskB_augB"
+      - "use_one_decoder"
   one_fold:
     value: "True"
-  # split_A:
-  #   value: "True"
+  split_A:
+    value: "True"
+  ae_dim_1A:
+    values:
+      - "128"
   split_B:
     values:
       - "True"
@@ -38,28 +41,28 @@ parameters:
   ae_use_lrscheduler:
     values:
       - "False"
-  # mask_A:
-  #   values:
-  #     - "True"
-  # num_mask_A:
-  #   values:
-  #     - "8"
-  #     - "16"
-  #     - "23"
+  mask_A:
+    values:
+      - "True"
+  num_mask_A:
+    values:
+      # - "8"
+      - "16"
+      # - "23"
   masking_method:
     values:
       - "zero"
       # - "noise"
-  mask_B:
-    values:
-      - "True"
-      - "False"
-  num_mask_B:
-    values:
-      # - "6"
-      # - "12"
-      # - "18"
-      - "23"
+  # mask_B:
+  #   values:
+  #     - "True"
+  #     - "False"
+  # num_mask_B:
+  #   values:
+  #     - "6"
+  #     - "12"
+  #     - "18"
+  #     - "23"
   cl_loss:
     values:
       - "bce"
@@ -89,6 +92,9 @@ parameters:
     values:
       # - "0.5"
       - "1.0"
+  cont_loss_temp:
+    values:
+      - "0.1"
   change_masks_every_epoch:
     values:
       - "True"
@@ -102,12 +108,19 @@ parameters:
       # - "0.2"
       # - "0.5"
       - "0.0"
-  ds_mask_B:
+  # ds_mask_B:
+  #   values:
+  #     - "True"
+  #     - "False"
+  # augment_B:
+  #   values:
+  #     - "True"
+  #     - "False"
+  use_one_decoder:
+    values: 
+      - "True"
+      - "False"
+  concat_latent_for_decoder:
     values:
       - "True"
       - "False"
-  augment_B:
-    values:
-      - "True"
-      - "False"
-  
