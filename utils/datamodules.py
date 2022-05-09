@@ -23,6 +23,7 @@ class ABCDataModule(LightningDataModule):
         self.num_workers = num_workers
         self.split_A = split_A
         self.split_B = split_B
+        self.augment_B = config['augment_B']
         self.seed = seed
         self.feature_selection = feature_selection
         self.feature_selection_alpha = feature_selection_alpha
@@ -31,6 +32,7 @@ class ABCDataModule(LightningDataModule):
         self.survival_loss = config['survival_loss']
         self.survival_T_max = config['survival_T_max']
         self.time_num = config['time_num']
+        self.ds_task = config['ds_task']
         # self.save_hyperparameters()
         self.load_data()
         self.preprocess_data()
@@ -52,6 +54,8 @@ class ABCDataModule(LightningDataModule):
                                 help='if True, A is split into 23 parts corresponding to the 23 different chromosomes')                        
         parser.add_argument('--split_B', default=False, type=lambda x: (str(x).lower() == 'true'),
                                 help='if True, B is split into 23 parts corresponding to the 23 different chromosomes')
+        parser.add_argument('--augment_B', default=False, type=lambda x: (str(x).lower() == 'true'),
+                                help='if True, B is added with zeros for samples that have data for A and C, but not B, should only be used with ds_mask_B')
         
 
         parser.add_argument("--feature_selection", type=str, default="none", help="options: none, f_test, chi2, mutual_info, all")
@@ -65,7 +69,11 @@ class ABCDataModule(LightningDataModule):
         self.C_df = self.load_file('C')
 
         if self.use_sample_list:
-            sample_list_path = os.path.join(self.data_dir, 'sample_list.tsv')
+            if self.augment_B:
+                sample_list_folder = 'AC_inter'
+            else:
+                sample_list_folder = 'ABC_inter'
+            sample_list_path = os.path.join(self.data_dir, 'sample_lists', self.ds_task, sample_list_folder, 'sample_list.tsv')
             print('Loading sample list from ' + sample_list_path)
             sample_list = np.loadtxt(sample_list_path, delimiter='\t', dtype='<U32')
         else:
@@ -74,6 +82,11 @@ class ABCDataModule(LightningDataModule):
         self.A_df = self.A_df.loc[:, sample_list]
         if self.split_A:
             self.A_df, _ = self.separate_A(self.A_df)
+        if self.augment_B:
+            print('Augmenting B with zeros')
+            samp_min_B = list(set(sample_list).difference(set(self.B_df.columns.to_list())))
+            aug_df = pd.DataFrame(np.zeros((self.B_df.shape[0],len(samp_min_B))), columns=samp_min_B, index=self.B_df.index)
+            self.B_df = pd.concat([self.B_df, aug_df], axis=1)
         self.B_df = self.B_df.loc[:, sample_list]
         if self.split_B:
             self.B_df, _ = self.separate_B(self.B_df)

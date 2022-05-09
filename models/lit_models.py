@@ -53,10 +53,12 @@ class AutoEncoder(pl.LightningModule):
         self.num_mask_B = num_mask_B
         self.masking_method = masking_method
         self.recon_all = recon_all
+        self.use_one_decoder = config['use_one_decoder']
+        self.concat_latent_for_decoder = config['concat_latent_for_decoder']
         
         if self.ae_net == "ae":
             if self.split_A and self.split_B:
-                self.net = AESepAB((input_size_A, input_size_B, input_size_C), latent_size, mask_A, mask_B, dropout_p=ae_drop_p, dim_1B=ae_dim_1B, dim_2B=ae_dim_2B, dim_1A=ae_dim_1A, dim_2A=ae_dim_2A, dim_1C=ae_dim_1C, dim_2C=ae_dim_2C)
+                self.net = AESepAB((input_size_A, input_size_B, input_size_C), latent_size, self.use_one_decoder, self.concat_latent_for_decoder, dropout_p=ae_drop_p, dim_1B=ae_dim_1B, dim_2B=ae_dim_2B, dim_1A=ae_dim_1A, dim_2A=ae_dim_2A, dim_1C=ae_dim_1C, dim_2C=ae_dim_2C)
             elif self.split_B:
                 self.net = AESepB((input_size_A, input_size_B, input_size_C), latent_size, dropout_p=ae_drop_p, dim_1B=ae_dim_1B, dim_2B=ae_dim_2B, dim_1A=ae_dim_1A, dim_2A=ae_dim_2A, dim_1C=ae_dim_1C, dim_2C=ae_dim_2C)
         elif self.ae_net == "vae":
@@ -134,6 +136,10 @@ class AutoEncoder(pl.LightningModule):
                                 help='if True, the chromosomes to mask are changed each epoch')
         parser.add_argument('--recon_all', default=False, type=lambda x: (str(x).lower() == 'true'),
                                 help='if True, modalities A, B and C will be reconstructed with higher weightage to masked modality, else, only the masked modality will be reconstructed')
+        parser.add_argument('--use_one_decoder', default=False, type=lambda x: (str(x).lower() == 'true'),
+                                help='if True, only one decoder is used to reconstruct all modalities')
+        parser.add_argument('--concat_latent_for_decoder', default=False, type=lambda x: (str(x).lower() == 'true'),
+                                help='if True, latent vectors from A, B and C are concatenated before being fed into the decoder')
         return parent_parser
 
     def forward(self, x):
@@ -153,23 +159,6 @@ class AutoEncoder(pl.LightningModule):
                                                             eta_min=self.hparams.ae_lr/50)
             return [optimizer], [lr_scheduler]
         return optimizer
-
-        # optimizer =  optim.Adam(self.parameters(), lr=self.ae_lr, weight_decay=self.ae_weight_decay, betas=(self.ae_beta1, 0.999))
-        # if self.ae_lr_policy == 'linear':
-        #     def lambda_rule(epoch):
-        #         lr_lambda = 1.0 - max(0, epoch - self.ae_max_epochs + self.ae_epoch_num_decay) / float(self.ae_epoch_num_decay + 1)
-        #         return lr_lambda
-        #     # lr_scheduler is imported from torch.optim
-        #     scheduler = lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda_rule)
-        # elif self.ae_lr_policy == 'step':
-        #     scheduler = lr_scheduler.StepLR(optimizer, step_size=self.ae_decay_step_size, gamma=0.1)
-        # elif self.ae_lr_policy == 'plateau':
-        #     scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.2, threshold=0.01, patience=5)
-        # elif self.ae_lr_policy == 'cosine':
-        #     scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.ae_max_epochs, eta_min=0)
-        # elif self.ae_lr_policy == 'none':
-        #     return optimizer                            
-        # return [optimizer], [scheduler]
     
     def train(self, mode=True):
         super().train(mode)
@@ -215,12 +204,8 @@ class AutoEncoder(pl.LightningModule):
             if self.split_B:
                 recon_B_loss = self.sum_subset_losses(x_B_recon, x_B)
             
-            if self.recon_all:
-                recon_loss_all = 0.5 * recon_A_loss + 0.25 * recon_B_loss + 0.25 * F.mse_loss(x_C_recon, x_C)
-                recon_loss = recon_loss_all
-            else:
-                recon_loss_all = recon_A_loss + recon_B_loss + F.mse_loss(x_C_recon, x_C)
-                recon_loss = recon_A_loss
+            recon_loss_all = 0.5 * recon_A_loss + 0.25 * recon_B_loss + 0.25 * F.mse_loss(x_C_recon, x_C)
+            recon_loss = recon_loss_all
 
             logs['{}_recon_all_loss'.format(self.mode)] = recon_loss_all
             logs['{}_recon_A_loss'.format(self.mode)] = recon_A_loss
@@ -231,12 +216,8 @@ class AutoEncoder(pl.LightningModule):
             x_A_recon, x_B_recon, x_C_recon = self.net.decode((h_A, h_B, h_C))
             recon_B_loss = self.sum_subset_losses(x_B_recon, x_B)
             
-            if self.recon_all:
-                recon_loss_all = 0.25 * F.mse_loss(x_A_recon, x_A) + 0.5 * recon_B_loss + 0.25 * F.mse_loss(x_C_recon, x_C)
-                recon_loss = recon_loss_all
-            else:
-                recon_loss_all = F.mse_loss(x_A_recon, x_A) + recon_B_loss + F.mse_loss(x_C_recon, x_C)
-                recon_loss = recon_B_loss
+            recon_loss_all = 0.25 * F.mse_loss(x_A_recon, x_A) + 0.5 * recon_B_loss + 0.25 * F.mse_loss(x_C_recon, x_C)
+            recon_loss = recon_loss_all
 
             logs['{}_recon_all_loss'.format(self.mode)] = recon_loss_all
             logs['{}_recon_B_loss'.format(self.mode)] = recon_B_loss
@@ -399,6 +380,9 @@ class DownstreamModel(pl.LightningModule):
         self.ds_task = config['ds_task']
         self.ds_save_latent_testing = config['ds_save_latent_testing']
         self.checkpoint_path = checkpoint_path
+        self.ds_mask_A = config['ds_mask_A']
+        self.ds_mask_B = config['ds_mask_B']
+        self.ds_masking_method = config['ds_masking_method']
         self.feature_extractor = AutoEncoder.load_from_checkpoint(ae_model_path)
         if config['ds_freeze_ae'] == True:
             self.feature_extractor.freeze()
@@ -446,6 +430,12 @@ class DownstreamModel(pl.LightningModule):
                                 help='whether to freeze the autoencoder for downstream model')
         parser.add_argument('--ds_save_latent_testing', default=False, type=lambda x: (str(x).lower() == 'true'),
                                 help='whether to save the latent representations of testing data')
+        parser.add_argument('--ds_mask_A', default=False, type=lambda x: (str(x).lower() == 'true'),
+                                help='if True, data from A will be masked')
+        parser.add_argument('--ds_mask_B', default=False, type=lambda x: (str(x).lower() == 'true'),
+                                help='if True, data from B will be masked')
+        parser.add_argument('--ds_masking_method', type=str, default='zero',
+                                help='method to mask A, options: "zero", "noise"')
         return parent_parser
 
     def forward(self, x):
@@ -488,6 +478,10 @@ class DownstreamModel(pl.LightningModule):
         x_A, x_B, x_C = batch['x']
         y = batch['y']
         sample_ids = batch['sample_id']
+        if self.ds_mask_A:
+            x_A = self.mask_x(x_A)
+        if self.ds_mask_B:
+            x_B = self.mask_x(x_B)
         h, y_out = self.forward((x_A, x_B, x_C))
         if self.cl_loss == "wbce":
             down_loss = self.wbce(y_out, y, self.class_weights)
@@ -504,6 +498,15 @@ class DownstreamModel(pl.LightningModule):
             "y_pred": y_pred.detach(),
             "y_prob": y_prob.detach()
         }
+
+    def mask_x(self, x):
+        x_masked = []
+        for i in range(len(x)):
+            if self.ds_masking_method == 'zero':
+                x_masked.append(torch.zeros_like(x[i]))
+            elif self.ds_masking_method == 'noise':
+                x_masked.append(x[i] + torch.randn_like(x[i]))
+        return x_masked
     
     def surv_step(self, batch):
         x_A, x_B, x_C = batch['x']
