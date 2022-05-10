@@ -1,4 +1,4 @@
-name: use_one_decoder
+name: add_distance_loss
 program: train.py
 method: grid
 metric:
@@ -12,15 +12,18 @@ parameters:
       - "binsearch"
   auto_lr_find:
     value: "True"
-  # pretraining_max_epochs:
-  #   values:
-  #     - "250"
+  pretraining_max_epochs:
+    values:
+      - "1"
+      - "50"
+      - "100"
+      - "200"
   gpus:
     values:
       - "-1"
   exp_name:
     values:
-      - "use_one_decoder"
+      - "add_distance_loss"
   one_fold:
     value: "True"
   split_A:
@@ -44,15 +47,16 @@ parameters:
   mask_A:
     values:
       - "True"
+      # - "False"
   num_mask_A:
     values:
       # - "8"
-      - "16"
-      # - "23"
+      # - "16"
+      - "23"
   masking_method:
     values:
-      - "zero"
-      # - "noise"
+      # - "zero"
+      - "noise"
   # mask_B:
   #   values:
   #     - "True"
@@ -86,12 +90,12 @@ parameters:
   cont_loss:
     values:
       # - "none"
-      - "clip"
-      # - "barlowtwins"
+      # - "clip"
+      - "barlowtwins"
   cont_loss_weight:
     values:
-      # - "0.5"
-      - "1.0"
+      - "0.5"
+      # - "1.0"
   cont_loss_temp:
     values:
       - "0.1"
@@ -108,19 +112,26 @@ parameters:
       # - "0.2"
       # - "0.5"
       - "0.0"
-  # ds_mask_B:
+  # ds_mask_A:
   #   values:
   #     - "True"
   #     - "False"
-  # augment_B:
+  # augment_A:
   #   values:
   #     - "True"
   #     - "False"
-  use_one_decoder:
-    values: 
-      - "True"
-      - "False"
-  concat_latent_for_decoder:
+  # use_one_decoder:
+  #   values: 
+  #     - "True"
+  #     - "False"
+  # concat_latent_for_decoder:
+  #   values:
+  #     - "True"
+  #     - "False"
+  add_distance_loss:
     values:
       - "True"
       - "False"
+  distance_loss_weight:
+    values:
+      - "1.0"

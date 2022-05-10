@@ -42,6 +42,8 @@ class AutoEncoder(pl.LightningModule):
         self.cont_loss_weight = cont_loss_weight
         self.cont_loss_temp = cont_loss_temp
         self.cont_loss_lambda = cont_loss_lambda
+        self.add_distance_loss = config['add_distance_loss']
+        self.distance_loss_weight = config['distance_loss_weight']
         self.ae_optimizer = ae_optimizer
         self.ae_use_lrscheduler = ae_use_lrscheduler
         self.cont_loss = cont_loss
@@ -79,6 +81,8 @@ class AutoEncoder(pl.LightningModule):
             elif cont_loss == "barlowtwins":
                 self.cont_criterion = BarlowTwinsLoss(lambd=cont_loss_lambda, latent_size=latent_size, proj_size=self.projection_size)
         
+        if self.add_distance_loss:
+            self.dist_loss = nn.MSELoss()
         if self.mask_B:
             self.mask_B_ids = np.random.randint(0, len(self.input_size_B), size=self.num_mask_B)
         if self.mask_A:
@@ -105,6 +109,8 @@ class AutoEncoder(pl.LightningModule):
         parser.add_argument("--cont_loss_temp", type=float, default=0.1)
         parser.add_argument("--cont_loss_lambda", type=float, default=0.0051, help="for barlowtwins")
         parser.add_argument("--cont_loss_weight", type=float, default=0.5)
+        parser.add_argument("--add_distance_loss", default=False, type=lambda x: (str(x).lower() == 'true'))
+        parser.add_argument("--distance_loss_weight", type=float, default=0.5)
         parser.add_argument("--ae_optimizer", type=str, default="adam", help="optimizer to use, options: adam, lars")
         parser.add_argument("--ae_use_lrscheduler", default=False, type=lambda x: (str(x).lower() == 'true'))
         parser.add_argument("--ae_beta1", type=float, default=0.5)
@@ -321,22 +327,30 @@ class AutoEncoder(pl.LightningModule):
         logs['{}_cont_loss'.format(self.mode)] = cont_loss
         return logs, cont_loss
         
+    def dist_step(self, h):
+        logs = {}
+        h_A, h_B, h_C = h
+        dist_loss = self.dist_loss(h_A, h_B) + self.dist_loss(h_B, h_C) + self.dist_loss(h_C, h_A)
+        return logs, dist_loss
+    
     def training_step(self, batch, batch_idx):
         if self.ae_net == 'ae':
-            logs, h, recon_loss = self.ae_step(batch) 
+            logs, h, pretext_loss = self.ae_step(batch) 
         elif self.ae_net == 'vae':
-            logs, h, recon_loss = self.vae_step(batch)
+            logs, h, pretext_loss = self.vae_step(batch)
         for k, v in logs.items():
             self.log(k, v, on_step=False, on_epoch=True)
+        if self.add_distance_loss:
+            logs, dist_loss = self.dist_step(h)
+            pretext_loss += dist_loss * self.distance_loss_weight
+            self.log('{}_dist_loss'.format(self.mode), dist_loss, on_step=False, on_epoch=True)
         if self.cont_loss != "none":
             logs, cont_loss = self.cont_step(h)
-            pretext_loss = recon_loss + self.cont_loss_weight * cont_loss
+            pretext_loss += self.cont_loss_weight * cont_loss
             logs['{}_pretext_loss'.format(self.mode)] = pretext_loss
             for k, v in logs.items():
                 self.log(k, v, on_step=False, on_epoch=True)
-            return pretext_loss
-        else:
-            return recon_loss
+        return pretext_loss
     
     def validation_step(self, batch, batch_idx):
         # if self.global_step == 0: 
@@ -344,12 +358,16 @@ class AutoEncoder(pl.LightningModule):
         #     wandb.define_metric('val_recon_loss', summary='min')
         
         if self.ae_net == 'ae':
-            logs, h, recon_loss = self.ae_step(batch) 
+            logs, h, pretext_loss = self.ae_step(batch) 
         elif self.ae_net == 'vae':
-            logs, h, recon_loss = self.vae_step(batch)
+            logs, h, pretext_loss = self.vae_step(batch)
+        if self.add_distance_loss:
+            dist_logs, dist_loss = self.dist_step(h)
+            pretext_loss += dist_loss * self.distance_loss_weight
+            logs['{}_dist_loss'.format(self.mode)] = dist_loss
         if self.cont_loss != "none":
             cont_logs, cont_loss = self.cont_step(h)
-            pretext_loss = recon_loss + self.cont_loss_weight * cont_loss
+            pretext_loss += self.cont_loss_weight * cont_loss
             cont_logs['{}_pretext_loss'.format(self.mode)] = pretext_loss
             return {**logs, **cont_logs}
         else:
