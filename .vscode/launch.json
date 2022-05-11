@@ -110,11 +110,12 @@
                 "--ae_use_lrscheduler", "False",
                 "--mask_A", "True",
                 "--num_mask_A", "23",
-                "--masking_method", "noise",
+                "--masking_method", "swap_noise",
+                "--change_masks_every_epoch", "True",
                 "--ae_net", "ae",
                 "--pretraining_patience", "25",
                 "--downstream_patience", "25",
-                "--pretraining_max_epochs", "50",
+                "--pretraining_max_epochs", "100",
                 "--downstream_max_epochs", "250",
                 "--ae_lr", "0.001",
                 "--ds_task", "class",
@@ -135,7 +136,7 @@
 
                 // "--use_one_decoder", "True",
                 // "--concat_latent_for_decoder", "True",
-                // "--change_masks_every_epoch", "True",
+               
                 // "--load_pretrained_ae", "True",
                 // "--pretrained_ae_path", "./checkpoints/mask_cont/fold-0/pretraining/version_31/epoch=83-step=1007.ckpt",
                 // "--ds_save_latent_testing", "True"

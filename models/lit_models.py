@@ -137,7 +137,7 @@ class AutoEncoder(pl.LightningModule):
         parser.add_argument('--num_mask_B', type=int, default=0,
                                 help='number of chromosomes of B to mask')
         parser.add_argument('--masking_method', type=str, default='zero',
-                                help='method to mask data, can be "zero" or "noise"')
+                                help='method to mask data, can be "zero", "gaussian_noise" or "swap_noise')
         parser.add_argument('--change_masks_every_epoch', default=False, type=lambda x: (str(x).lower() == 'true'),
                                 help='if True, the chromosomes to mask are changed each epoch')
         parser.add_argument('--recon_all', default=False, type=lambda x: (str(x).lower() == 'true'),
@@ -189,8 +189,11 @@ class AutoEncoder(pl.LightningModule):
             if i in mask_ids:
                 if self.masking_method == 'zero':
                     x_masked[-1] = torch.zeros_like(x_masked[-1])
-                elif self.masking_method == 'noise':
+                elif self.masking_method == 'gaussian_noise':
                     x_masked[-1] = x_masked[-1] + torch.randn_like(x_masked[-1])
+                elif self.masking_method == 'swap_noise':
+                    for j in range(x_masked[-1].shape[1]):
+                        x_masked[-1][:, j] = x_masked[-1][torch.randperm(x_masked[-1].shape[0]), j]
         return x_masked
     
     def sum_subset_losses(self, x_recon, x):
@@ -453,7 +456,7 @@ class DownstreamModel(pl.LightningModule):
         parser.add_argument('--ds_mask_B', default=False, type=lambda x: (str(x).lower() == 'true'),
                                 help='if True, data from B will be masked')
         parser.add_argument('--ds_masking_method', type=str, default='zero',
-                                help='method to mask A, options: "zero", "noise"')
+                                help='method to mask A, options: "zero", "gaussian_noise"')
         return parent_parser
 
     def forward(self, x):
@@ -522,7 +525,7 @@ class DownstreamModel(pl.LightningModule):
         for i in range(len(x)):
             if self.ds_masking_method == 'zero':
                 x_masked.append(torch.zeros_like(x[i]))
-            elif self.ds_masking_method == 'noise':
+            elif self.ds_masking_method == 'gaussian_noise':
                 x_masked.append(x[i] + torch.randn_like(x[i]))
         return x_masked
     
