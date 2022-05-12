@@ -27,7 +27,7 @@ parameters:
   batch_size:
     values:
       - "512"
-  change_masks_every_epoch:
+  change_ch_to_mask_every_epoch:
     values:
       - "True"
   cl_loss:
