@@ -1,8 +1,8 @@
-method: grid
+method: random
 metric:
   goal: maximize
   name: test_accuracy
-name: add_distance_loss_concat
+name: dist_loss_tune
 parameters:
   add_distance_loss:
     values:
@@ -33,18 +33,23 @@ parameters:
   cl_loss:
     values:
       - bce
-  concat_latent_for_decoder:
-    values:
-      - "True"
+  # concat_latent_for_decoder:
+  #   values:
+  #     - "True"
   cont_loss:
     values:
+      - patient
+  cont_loss_criterion:
+    values:
       - barlowtwins
+      - clip
   cont_loss_temp:
     values:
       - "0.1"
   cont_loss_weight:
     values:
       - "0.5"
+      - "1.0"
   data_dir:
     values:
       - ./data/ABC_inter/Normalized
@@ -53,7 +58,7 @@ parameters:
       # - "1.0"
       # - "0.5"
       - "0.1"
-      - "0.01"
+      # - "0.01"
   ds_drop_p:
     values:
       - "0.0"
@@ -65,7 +70,7 @@ parameters:
       - class
   exp_name:
     values:
-      - add_distance_loss_concat
+      - dist_loss_tune
   gpus:
     values:
       - "-1"
@@ -77,20 +82,22 @@ parameters:
       - "True"
   masking_method:
     values:
-      - noise
+      - gaussian_noise
+      - zero
   num_mask_A:
     values:
       - "23"
+      - "16"
   num_workers:
     value: "4"
   one_fold:
     value: "True"
   pretraining_max_epochs:
     values:
-      # - "1"
+      # - "15"
       # - "25"
       - "100"
-      - "50"
+      # - "50"
       # - "200"
   recon_all:
     value: "True"
