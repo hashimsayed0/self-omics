@@ -1,0 +1,104 @@
+method: grid
+metric:
+  goal: maximize
+  name: test_accuracy
+name: add_distance_loss_concat
+parameters:
+  add_distance_loss:
+    values:
+      - "True"
+  ae_dim_1A:
+    values:
+      - "128"
+  ae_drop_p:
+    values:
+      - "0.0"
+  ae_net:
+    values:
+      - ae
+  ae_use_lrscheduler:
+    values:
+      - "False"
+  auto_lr_find:
+    value: "True"
+  auto_scale_batch_size:
+    values:
+      - binsearch
+  batch_size:
+    values:
+      - "512"
+  change_masks_every_epoch:
+    values:
+      - "True"
+  cl_loss:
+    values:
+      - bce
+  concat_latent_for_decoder:
+    values:
+      - "True"
+  cont_loss:
+    values:
+      - barlowtwins
+  cont_loss_temp:
+    values:
+      - "0.1"
+  cont_loss_weight:
+    values:
+      - "0.5"
+  data_dir:
+    values:
+      - ./data/ABC_inter/Normalized
+  distance_loss_weight:
+    values:
+      # - "1.0"
+      # - "0.5"
+      - "0.1"
+      - "0.01"
+  ds_drop_p:
+    values:
+      - "0.0"
+  ds_latent_agg_method:
+    values:
+      - sum
+  ds_task:
+    values:
+      - class
+  exp_name:
+    values:
+      - add_distance_loss_concat
+  gpus:
+    values:
+      - "-1"
+  latent_size:
+    values:
+      - "512"
+  mask_A:
+    values:
+      - "True"
+  masking_method:
+    values:
+      - noise
+  num_mask_A:
+    values:
+      - "23"
+  num_workers:
+    value: "4"
+  one_fold:
+    value: "True"
+  pretraining_max_epochs:
+    values:
+      # - "1"
+      # - "25"
+      - "100"
+      - "50"
+      # - "200"
+  recon_all:
+    value: "True"
+  split_A:
+    value: "True"
+  split_B:
+    values:
+      - "True"
+  use_sample_list:
+    value: "True"
+program: train.py
