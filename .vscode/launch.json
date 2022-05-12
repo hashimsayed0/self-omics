@@ -111,7 +111,8 @@
                 "--mask_A", "True",
                 "--num_mask_A", "23",
                 "--masking_method", "swap_noise",
-                "--change_masks_every_epoch", "True",
+                "--change_ch_to_mask_every_epoch", "True",
+                // "--choose_masking_method_every_epoch", "True",
                 "--ae_net", "ae",
                 "--pretraining_patience", "25",
                 "--downstream_patience", "25",
@@ -127,12 +128,13 @@
                 "--ae_drop_p", "0.0",
                 "--ds_drop_p", "0.0",
 
-                "--cont_loss", "barlowtwins",
+                "--cont_loss", "both",
+                "--cont_loss_criterion", "barlowtwins",
                 "--cont_loss_temp", "0.1",
                 "--cont_loss_weight", "0.5",
 
                 "--add_distance_loss", "True",
-                "--distance_loss_weight", "1.0",
+                "--distance_loss_weight", "0.1",
 
                 // "--use_one_decoder", "True",
                 // "--concat_latent_for_decoder", "True",

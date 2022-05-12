@@ -30,7 +30,7 @@ def parse_arguments():
     parser.add_argument("--pretraining_patience", type=int, default=40)
     parser.add_argument("--downstream_patience", type=int, default=40)
     parser.add_argument("--pretraining_max_epochs", type=int, default=200)
-    parser.add_argument("--downstream_max_epochs", type=int, default=200)
+    parser.add_argument("--downstream_max_epochs", type=int, default=150)
     
     parser = ABCDataModule.add_data_module_args(parser)
     parser = AutoEncoder.add_model_specific_args(parser)

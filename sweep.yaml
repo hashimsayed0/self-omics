@@ -1,4 +1,4 @@
-name: swap_noise
+name: cont_type
 program: train.py
 method: bayes
 metric:
@@ -18,13 +18,13 @@ parameters:
       # - "25"
       - "50"
       - "100"
-      - "200"
+      # - "200"
   gpus:
     values:
       - "-1"
   exp_name:
     values:
-      - "swap_noise"
+      - "cont_type"
   one_fold:
     value: "True"
   split_A:
@@ -57,8 +57,8 @@ parameters:
   masking_method:
     values:
       # - "zero"
-      # - "gaussian_noise"
-      - "swap_noise"
+      - "gaussian_noise"
+      # - "swap_noise"
   # mask_B:
   #   values:
   #     - "True"
@@ -91,17 +91,22 @@ parameters:
       - "sum"
   cont_loss:
     values:
+      - "both"
+      - "type"
+  cont_loss_criterion:
+    values:
       # - "none"
       # - "clip"
       - "barlowtwins"
   cont_loss_weight:
     values:
       - "0.5"
-      # - "1.0"
+      - "0.01"
+      - "0.1"
   cont_loss_temp:
     values:
       - "0.1"
-  change_masks_every_epoch:
+  change_ch_to_mask_every_epoch:
     values:
       - "True"
       # - "False"
@@ -137,5 +142,6 @@ parameters:
   distance_loss_weight:
     values:
       - "0.1"
-      - "0.01"
-      - "0.05"
+      # - "1.0"
+      # - "0.01"
+      # - "0.05"
