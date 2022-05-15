@@ -20,9 +20,10 @@ import numpy as np
 import utils.metrics as metrics
 import pandas as pd
 import os
+import string
 
 class AutoEncoder(pl.LightningModule):
-    def __init__(self, input_size_A, input_size_B, input_size_C, ae_net, ae_weight_kl, latent_size, projection_size, ae_lr, ae_weight_decay, ae_momentum, ae_drop_p, ae_beta1, ae_lr_policy, ae_epoch_num_decay, ae_decay_step_size, max_epochs, cont_loss_criterion, cont_loss_temp, cont_loss_lambda, ae_optimizer, ae_use_lrscheduler, cont_loss_weight, split_A, split_B, mask_A, mask_B, num_mask_A, num_mask_B, masking_method, recon_all, batch_size, ae_dim_1B, ae_dim_2B, ae_dim_1A, ae_dim_2A, ae_dim_1C, ae_dim_2C, **config):
+    def __init__(self, input_size_A, input_size_B, input_size_C, ae_net, ae_weight_kl, latent_size, projection_size, ae_lr, ae_weight_decay, ae_momentum, ae_drop_p, ae_beta1, ae_lr_policy, ae_epoch_num_decay, ae_decay_step_size, max_epochs, cont_loss_criterion, cont_loss_temp, cont_loss_lambda, ae_optimizer, ae_use_lrscheduler, cont_loss_weight, split_A, split_B, mask_A, mask_B, num_mask_A, num_mask_B, masking_method, batch_size, ae_dim_1B, ae_dim_2B, ae_dim_1A, ae_dim_2A, ae_dim_1C, ae_dim_2C, **config):
         super(AutoEncoder, self).__init__()
         self.input_size_A = input_size_A
         self.input_size_B = input_size_B
@@ -56,13 +57,13 @@ class AutoEncoder(pl.LightningModule):
         self.num_mask_B = num_mask_B
         self.masking_method = masking_method
         self.choose_masking_method_every_epoch = config['choose_masking_method_every_epoch']
-        self.recon_all = recon_all
         self.use_one_decoder = config['use_one_decoder']
         self.concat_latent_for_decoder = config['concat_latent_for_decoder']
+        self.recon_all_thrice = config['recon_all_thrice']
         
         if self.ae_net == "ae":
             if self.split_A and self.split_B:
-                self.net = AESepAB((input_size_A, input_size_B, input_size_C), latent_size, self.use_one_decoder, self.concat_latent_for_decoder, dropout_p=ae_drop_p, dim_1B=ae_dim_1B, dim_2B=ae_dim_2B, dim_1A=ae_dim_1A, dim_2A=ae_dim_2A, dim_1C=ae_dim_1C, dim_2C=ae_dim_2C)
+                self.net = AESepAB((input_size_A, input_size_B, input_size_C), latent_size, self.use_one_decoder, self.concat_latent_for_decoder, self.recon_all_thrice, dropout_p=ae_drop_p, dim_1B=ae_dim_1B, dim_2B=ae_dim_2B, dim_1A=ae_dim_1A, dim_2A=ae_dim_2A, dim_1C=ae_dim_1C, dim_2C=ae_dim_2C)
             elif self.split_B:
                 self.net = AESepB((input_size_A, input_size_B, input_size_C), latent_size, dropout_p=ae_drop_p, dim_1B=ae_dim_1B, dim_2B=ae_dim_2B, dim_1A=ae_dim_1A, dim_2A=ae_dim_2A, dim_1C=ae_dim_1C, dim_2C=ae_dim_2C)
         elif self.ae_net == "vae":
@@ -151,8 +152,8 @@ class AutoEncoder(pl.LightningModule):
                                 help='if True, the masking method is chosen randomly each epoch and "masking_method" argument is ignored')
         parser.add_argument('--change_ch_to_mask_every_epoch', default=False, type=lambda x: (str(x).lower() == 'true'),
                                 help='if True, the chromosomes to mask are changed each epoch')
-        parser.add_argument('--recon_all', default=False, type=lambda x: (str(x).lower() == 'true'),
-                                help='if True, modalities A, B and C will be reconstructed with higher weightage to masked modality, else, only the masked modality will be reconstructed')
+        parser.add_argument('--recon_all_thrice', default=False, type=lambda x: (str(x).lower() == 'true'),
+                                help='if True, modalities A, B and C will be reconstructed from latent representations of each A, B and C modalities')
         parser.add_argument('--use_one_decoder', default=False, type=lambda x: (str(x).lower() == 'true'),
                                 help='if True, only one decoder is used to reconstruct all modalities')
         parser.add_argument('--concat_latent_for_decoder', default=False, type=lambda x: (str(x).lower() == 'true'),
@@ -221,16 +222,30 @@ class AutoEncoder(pl.LightningModule):
         if self.mask_A:
             x_A_masked = self.mask_x(x_A, self.mask_A_ids)
             h_A, h_B, h_C = self.net.encode((x_A_masked, x_B, x_C))
-            x_A_recon, x_B_recon, x_C_recon = self.net.decode((h_A, h_B, h_C))
-            recon_A_loss = self.sum_subset_losses(x_A_recon, x_A)
-            if self.split_B:
-                recon_B_loss = self.sum_subset_losses(x_B_recon, x_B)
+            recon_list = []
+            if self.recon_all_thrice:
+                recon_list = self.net.decode((h_A, h_B, h_C))
+            else:
+                recon_list.append(self.net.decode((h_A, h_B, h_C)))
+            recon_loss = 0
+            for i, x_recon in enumerate(recon_list):
+                x_A_recon, x_B_recon, x_C_recon = x_recon
+                recon_A_loss = self.sum_subset_losses(x_A_recon, x_A)
+                if self.split_B:
+                    recon_B_loss = self.sum_subset_losses(x_B_recon, x_B)
+                
+                recon_loss_all = 0.5 * recon_A_loss + 0.25 * recon_B_loss + 0.25 * F.mse_loss(x_C_recon, x_C)
+                recon_loss += recon_loss_all
+                
+                if self.recon_all_thrice:
+                    logs['{}_recon_all_from_{}_loss'.format(self.mode, string.ascii_uppercase[i])] = recon_loss_all
+                    logs['{}_recon_A_from_{}_loss'.format(self.mode, string.ascii_uppercase[i])] = recon_A_loss
+                else:
+                    logs['{}_recon_all_loss'.format(self.mode)] = recon_loss_all
+                    logs['{}_recon_A_loss'.format(self.mode)] = recon_A_loss
             
-            recon_loss_all = 0.5 * recon_A_loss + 0.25 * recon_B_loss + 0.25 * F.mse_loss(x_C_recon, x_C)
-            recon_loss = recon_loss_all
-
-            logs['{}_recon_all_loss'.format(self.mode)] = recon_loss_all
-            logs['{}_recon_A_loss'.format(self.mode)] = recon_A_loss
+            if self.recon_all_thrice:
+                logs['{}_total_recon_all_loss'.format(self.mode)] = recon_loss
         
         elif self.mask_B:
             x_B_masked = self.mask_x(x_B, self.mask_B_ids)

@@ -65,16 +65,20 @@ def define_callbacks_loggers_pretraining(param, checkpoint_path, count):
         if param.ae_net == 'vae':
             callback_key = 'val_recon_B_kl_loss'
         elif param.ae_net == 'ae':
-            callback_key = 'val_recon_B_loss'
+            callback_key = 'val_recon_all_loss'
     elif param.mask_A:
         if param.ae_net == 'vae':
             callback_key = 'val_recon_A_kl_loss'
         elif param.ae_net == 'ae':
-            callback_key = 'val_recon_A_loss'
-    elif param.cont_loss != 'none':
-        callback_key = 'val_pretext_loss'
+            if param.recon_all_thrice:
+                callback_key = 'val_total_recon_all_loss'   
+            else: 
+                callback_key = 'val_recon_all_loss'
     else:
         callback_key = 'val_recon_loss'
+    if param.cont_loss != 'none' or param.add_distance_loss:
+        callback_key = 'val_pretext_loss'
+    
     param.max_epochs = param.pretraining_max_epochs
     csv_logger = pl_loggers.CSVLogger(checkpoint_path, name='pretraining')
     early_stopping = EarlyStopping(callback_key, patience=param.pretraining_patience)

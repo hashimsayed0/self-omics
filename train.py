@@ -30,6 +30,7 @@ for fold in range(param.num_folds):
         A_shape, B_shape, C_shape = util.compute_input_shapes(abc_dm)
         ae = lit_models.AutoEncoder(A_shape, B_shape, C_shape, **vars(param))
         ae_trainer = Trainer.from_argparse_args(param, callbacks=[early_stopping, model_checkpoint], logger=[csv_logger, wandb_logger])
+        abc_dm.mode = 'downstream'
         ae_trainer.fit(ae, abc_dm)
         ae_model_path = model_checkpoint.best_model_path
         # wandb.finish()

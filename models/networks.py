@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import functools
+import string
 
 class Encoder(torch.nn.Module):
     def __init__(self, input_size, output_size, drop_p):
@@ -283,7 +284,7 @@ class AESepAB(nn.Module):
         Defines a fully-connected variational autoencoder for multi-omics dataset
         DNA methylation input separated by chromosome
     """
-    def __init__(self, input_sizes, latent_size, use_one_decoder, concat_latent_for_decoder, norm_layer=nn.BatchNorm1d, leaky_slope=0.2, dropout_p=0, dim_1B=128, dim_2B=1024,
+    def __init__(self, input_sizes, latent_size, use_one_decoder, concat_latent_for_decoder, recon_all_thrice, norm_layer=nn.BatchNorm1d, leaky_slope=0.2, dropout_p=0, dim_1B=128, dim_2B=1024,
                  dim_1A=128, dim_2A=1024, dim_1C=1024, dim_2C=1024, dim_2 = 2048, dim_1=1024):
         """
             Construct a fully-connected variational autoencoder
@@ -304,6 +305,7 @@ class AESepAB(nn.Module):
         self.dim_1A = dim_1A
         self.use_one_decoder = use_one_decoder
         self.concat_latent_for_decoder = concat_latent_for_decoder
+        self.recon_all_thrice = recon_all_thrice
 
         # ENCODER
         # Layer 1
@@ -339,7 +341,7 @@ class AESepAB(nn.Module):
         # DECODER
         # Layer 1
         if self.concat_latent_for_decoder:
-                latent_size *= 3
+            latent_size *= 3
 
         if self.use_one_decoder:
             self.decode_fc_3 = FCBlock(latent_size, dim_2, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=dropout_p,
@@ -366,28 +368,78 @@ class AESepAB(nn.Module):
                                     activation=False, normalization=False)
             self.decode_fc_3C = FCBlock(latent_size, dim_2C, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=dropout_p,
                                     activation=False, normalization=False)
-                            
-            # Layer 2
-            self.decode_fc_2B = FCBlock(dim_2B, dim_1B*23, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=dropout_p,
-                                        activation=True)
-            self.decode_fc_2A = FCBlock(dim_2A, dim_1A*23, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=dropout_p,
-                                        activation=True)
-            self.decode_fc_2C = FCBlock(dim_2C, dim_1C, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=dropout_p,
-                                        activation=True)
 
-            # Layer 3
-            self.decode_fc_1B_list = nn.ModuleList()
-            for i in range(0, 23):
-                self.decode_fc_1B_list.append(
-                    FCBlock(dim_1B, self.B_dim_list[i], norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=0,
-                            activation=False, normalization=False))
-            self.decode_fc_1A_list = nn.ModuleList()
-            for i in range(0, 23):
-                self.decode_fc_1A_list.append(
-                    FCBlock(dim_1A, self.A_dim_list[i], norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=0,
-                            activation=False, normalization=False))
-            self.decode_fc_1C = FCBlock(dim_1C, self.C_dim, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=0,
-                                        activation=False, normalization=False)
+            if self.recon_all_thrice:
+                dim_1 = dim_1B * 23
+                # Layer 2
+                self.decode_fc_2B = FCBlock(dim_2B, dim_1, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=dropout_p,
+                                            activation=True)
+                self.decode_fc_2A = FCBlock(dim_2A, dim_1, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=dropout_p,
+                                            activation=True)
+                self.decode_fc_2C = FCBlock(dim_2C, dim_1, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=dropout_p,
+                                            activation=True)
+                
+                # Layer 3
+                self.decode_from_A_fc_1B_list = nn.ModuleList()
+                for i in range(0, 23):
+                    self.decode_from_A_fc_1B_list.append(
+                        FCBlock(dim_1B, self.B_dim_list[i], norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=0,
+                                activation=False, normalization=False))
+                self.decode_from_A_fc_1A_list = nn.ModuleList()
+                for i in range(0, 23):
+                    self.decode_from_A_fc_1A_list.append(
+                        FCBlock(dim_1A, self.A_dim_list[i], norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=0,
+                                activation=False, normalization=False))
+                self.decode_from_A_fc_1C = FCBlock(dim_1, self.C_dim, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=0,
+                                            activation=False, normalization=False)
+                
+                self.decode_from_B_fc_1B_list = nn.ModuleList()
+                for i in range(0, 23):
+                    self.decode_from_B_fc_1B_list.append(
+                        FCBlock(dim_1B, self.B_dim_list[i], norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=0,
+                                activation=False, normalization=False))
+                self.decode_from_B_fc_1A_list = nn.ModuleList()
+                for i in range(0, 23):
+                    self.decode_from_B_fc_1A_list.append(
+                        FCBlock(dim_1A, self.A_dim_list[i], norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=0,
+                                activation=False, normalization=False))
+                self.decode_from_B_fc_1C = FCBlock(dim_1, self.C_dim, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=0,
+                                            activation=False, normalization=False)
+
+                self.decode_from_C_fc_1B_list = nn.ModuleList()
+                for i in range(0, 23):
+                    self.decode_from_C_fc_1B_list.append(
+                        FCBlock(dim_1B, self.B_dim_list[i], norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=0,
+                                activation=False, normalization=False))
+                self.decode_from_C_fc_1A_list = nn.ModuleList()
+                for i in range(0, 23):
+                    self.decode_from_C_fc_1A_list.append(
+                        FCBlock(dim_1A, self.A_dim_list[i], norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=0,
+                                activation=False, normalization=False))
+                self.decode_from_C_fc_1C = FCBlock(dim_1, self.C_dim, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=0,
+                                            activation=False, normalization=False)    
+
+            else:
+                # Layer 2
+                self.decode_fc_2B = FCBlock(dim_2B, dim_1B*23, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=dropout_p,
+                                            activation=True)
+                self.decode_fc_2A = FCBlock(dim_2A, dim_1A*23, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=dropout_p,
+                                            activation=True)
+                self.decode_fc_2C = FCBlock(dim_2C, dim_1C, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=dropout_p,
+                                        activation=True)
+                # Layer 3
+                self.decode_fc_1B_list = nn.ModuleList()
+                for i in range(0, 23):
+                    self.decode_fc_1B_list.append(
+                        FCBlock(dim_1B, self.B_dim_list[i], norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=0,
+                                activation=False, normalization=False))
+                self.decode_fc_1A_list = nn.ModuleList()
+                for i in range(0, 23):
+                    self.decode_fc_1A_list.append(
+                        FCBlock(dim_1A, self.A_dim_list[i], norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=0,
+                                activation=False, normalization=False))
+                self.decode_fc_1C = FCBlock(dim_1C, self.C_dim, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=0,
+                                            activation=False, normalization=False)
 
 
     def encode(self, x):
@@ -433,13 +485,26 @@ class AESepAB(nn.Module):
                 level_2_B = self.decode_fc_2(level_3_B)
                 level_2_C = self.decode_fc_2(level_3_C)
 
-                recon_B_list = []
-                for i in range(0, 23):
-                    recon_B_list.append(self.decode_fc_1B_list[i](level_2_B))
-                recon_A_list = []
-                for i in range(0, 23):
-                    recon_A_list.append(self.decode_fc_1A_list[i](level_2_A))
-                recon_C = self.decode_fc_1C(level_2_C)
+                if self.recon_all_thrice:
+                    recon_all_list = []
+                    for level_2 in [level_2_A, level_2_B, level_2_C]:
+                        recon_B_list = []
+                        for i in range(0, 23):
+                            recon_B_list.append(self.decode_fc_1B_list[i](level_2))
+                        recon_A_list = []
+                        for i in range(0, 23):
+                            recon_A_list.append(self.decode_fc_1A_list[i](level_2))
+                        recon_C = self.decode_fc_1C(level_2)
+                        recon_all_list.append((recon_A_list, recon_B_list, recon_C))
+                    return recon_all_list
+                else:
+                    recon_B_list = []
+                    for i in range(0, 23):
+                        recon_B_list.append(self.decode_fc_1B_list[i](level_2_B))
+                    recon_A_list = []
+                    for i in range(0, 23):
+                        recon_A_list.append(self.decode_fc_1A_list[i](level_2_A))
+                    recon_C = self.decode_fc_1C(level_2_C)
 
         else:
             if self.concat_latent_for_decoder:
@@ -456,13 +521,46 @@ class AESepAB(nn.Module):
             level_2_A = self.decode_fc_2A(level_3_A)
             level_2_C = self.decode_fc_2C(level_3_C)
 
-            recon_B_list = []
-            for i in range(0, 23):
-                recon_B_list.append(self.decode_fc_1B_list[i](level_2_B.narrow(1, i * self.dim_1B, self.dim_1B)))
-            recon_A_list = []
-            for i in range(0, 23):
-                recon_A_list.append(self.decode_fc_1A_list[i](level_2_A.narrow(1, i * self.dim_1A, self.dim_1A)))
-            recon_C = self.decode_fc_1C(level_2_C)
+            if self.recon_all_thrice:
+                recon_all_list = []
+
+                recon_B_list = []
+                for i in range(0, 23):
+                    recon_B_list.append(self.decode_from_A_fc_1B_list[i](level_2_A.narrow(1, i * self.dim_1B, self.dim_1B)))
+                recon_A_list = []
+                for i in range(0, 23):
+                    recon_A_list.append(self.decode_from_A_fc_1A_list[i](level_2_A.narrow(1, i * self.dim_1A, self.dim_1A)))
+                recon_C = self.decode_from_A_fc_1C(level_2_A)
+                recon_all_list.append((recon_A_list, recon_B_list, recon_C))
+
+                recon_B_list = []
+                for i in range(0, 23):
+                    recon_B_list.append(self.decode_from_B_fc_1B_list[i](level_2_B.narrow(1, i * self.dim_1B, self.dim_1B)))
+                recon_A_list = []
+                for i in range(0, 23):
+                    recon_A_list.append(self.decode_from_B_fc_1A_list[i](level_2_B.narrow(1, i * self.dim_1A, self.dim_1A)))
+                recon_C = self.decode_from_B_fc_1C(level_2_B)
+                recon_all_list.append((recon_A_list, recon_B_list, recon_C))
+
+                recon_B_list = []
+                for i in range(0, 23):
+                    recon_B_list.append(self.decode_from_C_fc_1B_list[i](level_2_C.narrow(1, i * self.dim_1B, self.dim_1B)))
+                recon_A_list = []
+                for i in range(0, 23):
+                    recon_A_list.append(self.decode_from_C_fc_1A_list[i](level_2_C.narrow(1, i * self.dim_1A, self.dim_1A)))
+                recon_C = self.decode_from_C_fc_1C(level_2_C)
+                recon_all_list.append((recon_A_list, recon_B_list, recon_C))
+
+                return recon_all_list
+
+            else:
+                recon_B_list = []
+                for i in range(0, 23):
+                    recon_B_list.append(self.decode_fc_1B_list[i](level_2_B.narrow(1, i * self.dim_1B, self.dim_1B)))
+                recon_A_list = []
+                for i in range(0, 23):
+                    recon_A_list.append(self.decode_fc_1A_list[i](level_2_A.narrow(1, i * self.dim_1A, self.dim_1A)))
+                recon_C = self.decode_fc_1C(level_2_C)
 
         return [recon_A_list, recon_B_list, recon_C]
 

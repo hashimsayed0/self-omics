@@ -34,6 +34,8 @@ class ABCDataModule(LightningDataModule):
         self.survival_T_max = config['survival_T_max']
         self.time_num = config['time_num']
         self.ds_task = config['ds_task']
+        self.use_test_as_val_for_downstream = config['use_test_as_val_for_downstream']
+        self.mode = 'pretraining'
         # self.save_hyperparameters()
         self.load_data()
         self.preprocess_data()
@@ -49,6 +51,8 @@ class ABCDataModule(LightningDataModule):
                                 help='data batch size')
         parser.add_argument('--val_ratio', type=float, default=0.15,
                                 help='val proportion of total training data')
+        parser.add_argument('--use_test_as_val_for_downstream', default=False, type=lambda x: (str(x).lower() == 'true'),
+                                help='use test data as val data for the downstream task')
         parser.add_argument('--num_workers', type=int, default=0,
                                 help='number of workers for data loading')
         parser.add_argument('--split_A', default=False, type=lambda x: (str(x).lower() == 'true'),
@@ -260,13 +264,25 @@ class ABCDataModule(LightningDataModule):
         return class_weights
 
     def setup(self, stage = None):
-        if stage == "fit" or stage is None:
-            self.trainset = ABCDataset(self.A_df, self.B_df, self.C_df, self.train_index, self.split_A, self.split_B, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor)
-            self.valset = ABCDataset(self.A_df, self.B_df, self.C_df, self.val_index, self.split_A, self.split_B, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor)
-        
-        if stage == "test" or stage is None or stage == "predict":
-            self.testset = ABCDataset(self.A_df, self.B_df, self.C_df, self.test_index, self.split_A, self.split_B, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor)
-    
+        if self.mode == 'pretraining':
+            if stage == "fit" or stage is None:
+                self.trainset = ABCDataset(self.A_df, self.B_df, self.C_df, self.train_index, self.split_A, self.split_B, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor)
+                self.valset = ABCDataset(self.A_df, self.B_df, self.C_df, self.val_index, self.split_A, self.split_B, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor)
+            
+            if stage == "test" or stage is None or stage == "predict":
+                self.testset = ABCDataset(self.A_df, self.B_df, self.C_df, self.test_index, self.split_A, self.split_B, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor)
+        elif self.mode == 'downstream':
+            if stage == "fit" or stage is None:
+                if self.use_test_as_val_for_downstream:
+                    self.trainset = ABCDataset(self.A_df, self.B_df, self.C_df, np.concatenate((self.train_index, self.val_index)), self.split_A, self.split_B, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor)
+                    self.valset = ABCDataset(self.A_df, self.B_df, self.C_df, self.test_index, self.split_A, self.split_B, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor)
+                else:
+                    self.trainset = ABCDataset(self.A_df, self.B_df, self.C_df, self.train_index, self.split_A, self.split_B, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor)
+                    self.valset = ABCDataset(self.A_df, self.B_df, self.C_df, self.val_index, self.split_A, self.split_B, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor)
+            
+            if stage == "test" or stage is None or stage == "predict":
+                self.testset = ABCDataset(self.A_df, self.B_df, self.C_df, self.test_index, self.split_A, self.split_B, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor)
+
     def train_dataloader(self):
         return DataLoader(self.trainset, batch_size=self.batch_size, num_workers=self.num_workers)
     

@@ -123,22 +123,24 @@
                 "--ds_latent_agg_method", "sum",
                 // "--ds_mask_B", "True",
                 // "--ds_masking_method", "zero",
-                // "--augment_B", "True",
+                // "--augment_B", "True"d,
 
                 "--ae_drop_p", "0.0",
                 "--ds_drop_p", "0.0",
 
-                "--cont_loss", "both",
+                "--cont_loss", "patient",
                 "--cont_loss_criterion", "barlowtwins",
                 "--cont_loss_temp", "0.1",
-                "--cont_loss_weight", "0.5",
+                "--cont_loss_weight", "1.0",
 
                 "--add_distance_loss", "True",
                 "--distance_loss_weight", "0.1",
 
                 // "--use_one_decoder", "True",
+                // "--recon_all_thrice", "True",
                 // "--concat_latent_for_decoder", "True",
                
+                "--use_test_as_val_for_downstream", "True",
                 // "--load_pretrained_ae", "True",
                 // "--pretrained_ae_path", "./checkpoints/mask_cont/fold-0/pretraining/version_31/epoch=83-step=1007.ckpt",
                 // "--ds_save_latent_testing", "True"
