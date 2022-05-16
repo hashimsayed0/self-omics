@@ -8,11 +8,12 @@ import os
 import torch
 
 class ABCDataset(Dataset):
-    def __init__(self, A_df, B_df, C_df, indices, split_A, split_B, labels = None, survival_T_array = None, survival_E_array = None, y_true_tensor = None):
+    def __init__(self, A_df, B_df, C_df, indices, split_A, split_B, ds_tasks, labels = None, survival_T_array = None, survival_E_array = None, y_true_tensor = None, values = None):
         super().__init__()
         self.split_A = split_A
         self.split_B = split_B
         self.indices = indices
+        self.ds_tasks = ds_tasks
 
         if self.split_A:
             A_df = [A_df[ch].iloc[:, indices] for ch in range(len(A_df))]
@@ -29,16 +30,19 @@ class ABCDataset(Dataset):
         C_df = C_df.iloc[:, indices]
         self.C_tensors = torch.tensor(C_df.values.astype(float)).float()
 
-        if survival_T_array is not None:
-            self.survival_T_array = survival_T_array[indices]
-            self.survival_E_array = survival_E_array[indices]
-            self.y_true_tensor = y_true_tensor[indices]
-            self.ds_task = 'surv'
-        else:
+        if 'class' in self.ds_tasks:
             labels = labels.iloc[indices]
             self.label_tensors = torch.tensor(labels.values.astype(float)).float()
             self.sample_ids = labels.index.to_list()
-            self.ds_task = 'class'
+        
+        if 'surv' in self.ds_tasks:
+            self.survival_T_array = survival_T_array[indices]
+            self.survival_E_array = survival_E_array[indices]
+            self.y_true_tensor = y_true_tensor[indices]
+        
+        if 'reg' in self.ds_tasks:
+            values = values.iloc[indices]
+            self.value_tenors = torch.tensor(values.values.astype(float)).float()
     
     def __len__(self):
         return len(self.indices)
@@ -58,15 +62,19 @@ class ABCDataset(Dataset):
         data_dict['x'] = (A_sample, B_sample, C_sample)
         data_dict['sample_id'] = self.sample_ids[idx]
         
-        if self.ds_task == 'class':
+        if 'class' in self.ds_tasks:
             label = self.label_tensors[idx,:]
             data_dict['y'] = label
 
-        elif self.ds_task == 'surv':
+        if 'surv' in self.ds_tasks:
             survival_T = self.survival_T_array[idx]
             survival_E = self.survival_E_array[idx]
             y_true = self.y_true_tensor[idx]
             data_dict['survival'] = (survival_T, survival_E, y_true)
+        
+        if 'reg' in self.ds_tasks:
+            value = self.value_tenors[idx]
+            data_dict['value'] = value
 
         return data_dict        
         

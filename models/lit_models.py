@@ -8,7 +8,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.optim import lr_scheduler
 import torch.nn.functional as F
-from .networks import SimCLRProjectionHead, CLIPProjectionHead, AESepB, AESepAB, ClassifierNet, VAESepB, VAESepAB, SurvivalNet
+from .networks import SimCLRProjectionHead, CLIPProjectionHead, AESepB, AESepAB, ClassifierNet, VAESepB, VAESepAB, SurvivalNet, RegressionNet
 from .losses import SimCLR_Loss, weighted_binary_cross_entropy, CLIPLoss, BarlowTwinsLoss, MTLR_survival_loss
 from .optimizers import LARS
 from torchmetrics.functional import f1_score, auroc, precision, recall, accuracy
@@ -261,15 +261,31 @@ class AutoEncoder(pl.LightningModule):
         
         else:
             h_A, h_B, h_C = self.net.encode((x_A, x_B, x_C))
-            x_A_recon, x_B_recon, x_C_recon = self.net.decode((h_A, h_B, h_C))
-            if self.split_B:
-                recon_B_loss = self.sum_subset_losses(x_B_recon, x_B)
-            if self.split_A:
-                recon_A_loss = self.sum_subset_losses(x_A_recon, x_A)
+            recon_list = []
+            if self.recon_all_thrice:
+                recon_list = self.net.decode((h_A, h_B, h_C))
             else:
-                recon_A_loss = F.mse_loss(x_A_recon, x_A)
-            recon_loss = recon_A_loss + recon_B_loss + F.mse_loss(x_C_recon, x_C) 
-            logs["{}_recon_loss".format(self.mode)] = recon_loss
+                recon_list.append(self.net.decode((h_A, h_B, h_C)))
+            recon_loss = 0
+            for i, x_recon in enumerate(recon_list):
+                x_A_recon, x_B_recon, x_C_recon = x_recon
+                if self.split_A:
+                    recon_A_loss = self.sum_subset_losses(x_A_recon, x_A)
+                else:
+                    recon_A_loss = F.mse_loss(x_A_recon, x_A)
+                if self.split_B:
+                    recon_B_loss = self.sum_subset_losses(x_B_recon, x_B)
+                
+                recon_loss_all = recon_A_loss + recon_B_loss + F.mse_loss(x_C_recon, x_C)
+                recon_loss += recon_loss_all
+                
+                if self.recon_all_thrice:
+                    logs['{}_recon_all_from_{}_loss'.format(self.mode, string.ascii_uppercase[i])] = recon_loss_all
+                else:
+                    logs['{}_recon_all_loss'.format(self.mode)] = recon_loss_all
+            
+            if self.recon_all_thrice:
+                logs['{}_total_recon_all_loss'.format(self.mode)] = recon_loss
         
         return logs, (h_A, h_B, h_C), recon_loss
     
@@ -470,6 +486,13 @@ class DownstreamModel(pl.LightningModule):
         self.ae_net = ae_net
         self.ds_max_epochs = max_epochs
         self.ds_task = config['ds_task']
+        if self.ds_task == 'multi':
+            self.ds_tasks = ['class', 'surv', 'reg']
+        else:
+            self.ds_tasks = [self.ds_task]
+        self.ds_k_class = config['ds_k_class']
+        self.ds_k_surv = config['ds_k_surv']
+        self.ds_k_reg = config['ds_k_reg']
         self.ds_save_latent_testing = config['ds_save_latent_testing']
         self.checkpoint_path = checkpoint_path
         self.ds_mask_A = config['ds_mask_A']
@@ -481,19 +504,22 @@ class DownstreamModel(pl.LightningModule):
         self.ds_latent_agg_method = config['ds_latent_agg_method']
         if self.ds_latent_agg_method == 'concat':
             latent_size *= 3
-        if self.ds_task == 'class':
-            self.ds_net = ClassifierNet(num_classes, latent_size, dropout_p=ds_drop_p)
+        if 'class' in self.ds_tasks:
+            self.class_net = ClassifierNet(num_classes, latent_size, dropout_p=ds_drop_p)
             self.wbce = weighted_binary_cross_entropy
             self.criterion = nn.CrossEntropyLoss()
             self.cl_loss = cl_loss
-        elif self.ds_task == 'surv':
+        if 'surv' in self.ds_tasks:
             self.time_num = config['time_num']
-            self.ds_net = SurvivalNet(self.time_num, latent_size, dropout_p=ds_drop_p)
+            self.surv_net = SurvivalNet(self.time_num, latent_size, dropout_p=ds_drop_p)
             self.survival_loss = config["survival_loss"]
             if self.survival_loss == 'MTLR':
                 self.tri_matrix_1 = self.get_tri_matrix(dimension_type=1)
                 self.tri_matrix_2 = self.get_tri_matrix(dimension_type=2)   
             self.survival_T_max = config['survival_T_max']
+        if 'reg' in self.ds_tasks:
+            self.reg_net = RegressionNet(latent_size, dropout_p=ds_drop_p)
+            self.reg_loss = nn.MSELoss()
         self.save_hyperparameters()
 
     @staticmethod
@@ -512,7 +538,10 @@ class DownstreamModel(pl.LightningModule):
                             help='The original learning rate multiply by a gamma every decay_step_size epoch (lr_policy == step)')
         parser.add_argument("--cl_loss", type=str, default="wbce", help="Loss function to use. Options: wbce, bce")
         parser.add_argument("--ds_task", type=str, default='class', 
-                            help='downstream task, options: class (cancer type classification), surv (survival analysis)')
+                            help='downstream task, options: class (classification like cancer type classification), surv (survival analysis), reg (regression like age prediction), multi (multi-task training of all 3 tasks together)')
+        parser.add_argument("--ds_k_class", type=int, default=1, help="Weight for classification loss in multi-task training")
+        parser.add_argument("--ds_k_surv", type=int, default=1, help="Weight for survival loss in multi-task training")
+        parser.add_argument("--ds_k_reg", type=int, default=1, help="Weight for regression loss in multi-task training")
         parser.add_argument('--survival_loss', type=str, default='MTLR', help='choose the survival loss')
         parser.add_argument('--survival_T_max', type=float, default=-1, help='maximum T value for survival prediction task')
         parser.add_argument('--time_num', type=int, default=256, help='number of time intervals in the survival model')
@@ -530,6 +559,17 @@ class DownstreamModel(pl.LightningModule):
                                 help='method to mask A, options: "zero", "gaussian_noise"')
         return parent_parser
 
+    def train(self, mode=True):
+        super().train(mode)
+        self.mode = "train"
+    
+    def eval(self):
+        super().eval()
+        self.mode = "val"
+    
+    def on_test_start(self):
+        self.mode = "test"
+
     def forward(self, x):
         if self.ae_net == 'ae':
             h_A, h_B, h_C = self.feature_extractor(x)
@@ -541,7 +581,7 @@ class DownstreamModel(pl.LightningModule):
                 h = torch.sum(torch.stack([h_A, h_B, h_C]), axis=0)
         elif self.ae_net == 'vae':
             h, _, _, _ = self.feature_extractor(x)
-        return h, self.ds_net(h)
+        return h
 
     def configure_optimizers(self):
         optimizer =  optim.Adam(self.parameters(), lr=self.ds_lr, weight_decay=self.ds_weight_decay, betas=(self.ds_beta1, 0.999))
@@ -562,8 +602,18 @@ class DownstreamModel(pl.LightningModule):
     def shared_step(self, batch):
         if self.ds_task == 'class':
             output_dict = self.class_step(batch)
+            output_dict['loss'] = output_dict['class_loss']
         elif self.ds_task == 'surv':
             output_dict = self.surv_step(batch)
+            output_dict['loss'] = output_dict['surv_loss']
+        elif self.ds_task == 'reg':
+            output_dict = self.reg_step(batch)
+            output_dict['loss'] = output_dict['reg_loss']
+        elif self.ds_task == 'multi':
+            output_dict = self.class_step(batch)
+            output_dict.update(self.surv_step(batch))
+            output_dict.update(self.reg_step(batch))
+            output_dict['loss'] = output_dict['class_loss'] * self.ds_k_class + output_dict['surv_loss'] * self.ds_k_surv + output_dict['reg_loss'] * self.ds_k_reg
         return output_dict
 
     def class_step(self, batch):
@@ -574,7 +624,8 @@ class DownstreamModel(pl.LightningModule):
             x_A = self.mask_x(x_A)
         if self.ds_mask_B:
             x_B = self.mask_x(x_B)
-        h, y_out = self.forward((x_A, x_B, x_C))
+        h = self.forward((x_A, x_B, x_C))
+        y_out = self.class_net(h)
         if self.cl_loss == "wbce":
             down_loss = self.wbce(y_out, y, self.class_weights)
         elif self.cl_loss == "bce":
@@ -583,7 +634,7 @@ class DownstreamModel(pl.LightningModule):
         y_prob = F.softmax(y_out, dim=1)
         _, y_pred = torch.max(y_prob, 1)
         return {
-            "loss": down_loss,
+            "class_loss": down_loss,
             "sample_ids": sample_ids,
             "h": h.detach(),
             "y_true": y_true,
@@ -604,14 +655,15 @@ class DownstreamModel(pl.LightningModule):
         x_A, x_B, x_C = batch['x']
         sample_ids = batch['sample_id']
         surv_T, surv_E, y_true = batch['survival']
-        h, y_out = self.forward((x_A, x_B, x_C))
+        h = self.forward((x_A, x_B, x_C))
+        y_out = self.surv_net(h)
         if self.survival_loss == 'MTLR':
             down_loss = MTLR_survival_loss(y_out, y_true, surv_E, self.tri_matrix_1)
         predict = self.predict_risk(y_out)
         survival = predict['survival']
         risk = predict['risk']
         return {
-            "loss": down_loss,
+            "surv_loss": down_loss,
             "sample_ids": sample_ids,
             "h": h.detach(),
             "y_true_E": surv_E.detach(),
@@ -619,6 +671,21 @@ class DownstreamModel(pl.LightningModule):
             "survival": survival.detach(),
             "risk": risk.detach(),
             "y_out": y_out.detach()
+        }
+    
+    def reg_step(self, batch):
+        x_A, x_B, x_C = batch['x']
+        v = batch['value']
+        sample_ids = batch['sample_id']
+        h = self.forward((x_A, x_B, x_C))
+        v_bar = self.reg_net(h)
+        loss = self.reg_loss(v_bar, v)
+        return {
+            "reg_loss": loss,
+            "sample_ids": sample_ids,
+            "h": h.detach(),
+            "v": v.detach(),
+            "v_bar": v_bar.detach()
         }
 
     def compute_class_metrics(self, outputs):
@@ -656,24 +723,45 @@ class DownstreamModel(pl.LightningModule):
             print('ValueError: NaNs detected in input when calculating integrated brier score.')
         return c_index, ibs
     
+    def compute_reg_metrics(self, outputs):
+        v = torch.cat([x["v"] for x in outputs]).cpu().numpy()
+        v_bar = torch.cat([x["v_bar"] for x in outputs]).cpu().numpy()
+        rmse =  sk.metrics.mean_squared_error(v, v_bar, squared=False)
+        return rmse
+    
     def training_step(self, batch, batch_idx):
         return self.shared_step(batch)
     
-    def training_epoch_end(self, outputs):
-        avg_loss = torch.stack([x["loss"] for x in outputs]).mean()
-        self.log("train_down_loss", avg_loss)
-        if self.ds_task == 'class':
+    def shared_epoch_end(self, outputs):
+        if 'class' in self.ds_tasks:
+            class_loss = torch.stack([x["class_loss"] for x in outputs]).mean()
+            self.log("{}_class_loss".format(self.mode), class_loss)
             accuracy, precision, recall, f1, auc = self.compute_class_metrics(outputs)
-            self.log("train_accuracy", accuracy)
-            self.log("train_precision", precision)
-            self.log("train_recall", recall)
-            self.log("train_f1", f1)
-            self.log("train_auc", auc)
+            self.log("{}_accuracy".format(self.mode), accuracy)
+            self.log("{}_precision".format(self.mode), precision)
+            self.log("{}_recall".format(self.mode), recall)
+            self.log("{}_f1".format(self.mode), f1)
+            self.log("{}_auc".format(self.mode), auc)
         
-        if self.ds_task == 'surv':
+        if 'surv' in self.ds_tasks:
+            surv_loss = torch.stack([x["surv_loss"] for x in outputs]).mean()
+            self.log("{}_surv_loss".format(self.mode), surv_loss)
             c_index, ibs = self.compute_surv_metrics(outputs)
-            self.log("train_c_index", c_index)
-            self.log("train_ibs", ibs)
+            self.log("{}_c_index".format(self.mode), c_index)
+            self.log("{}_ibs".format(self.mode), ibs)
+        
+        if 'reg' in self.ds_tasks:
+            reg_loss = torch.stack([x["reg_loss"] for x in outputs]).mean()
+            self.log("{}_reg_loss".format(self.mode), reg_loss)
+            rmse = self.compute_reg_metrics(outputs)
+            self.log("{}_rmse".format(self.mode), rmse)
+        
+        if self.ds_task == 'multi':
+            avg_loss = torch.stack([x["loss"] for x in outputs]).mean()
+            self.log("{}_down_loss".format(self.mode), avg_loss)
+
+    def training_epoch_end(self, outputs):
+        return self.shared_epoch_end(outputs)
     
     def validation_step(self, batch, batch_idx):
         if self.global_step == 0: 
@@ -681,19 +769,7 @@ class DownstreamModel(pl.LightningModule):
         return self.shared_step(batch)
 
     def validation_epoch_end(self, outputs):
-        avg_down_loss = torch.stack([x["loss"] for x in outputs]).mean()
-        self.log("val_down_loss", avg_down_loss)
-        if self.ds_task == 'class':
-            accuracy, precision, recall, f1, auc = self.compute_class_metrics(outputs)
-            self.log("val_accuracy", accuracy)
-            self.log("val_precision", precision)
-            self.log("val_recall", recall)
-            self.log("val_f1", f1)
-            self.log("val_auc", auc)
-        elif self.ds_task == 'surv':
-            c_index, ibs = self.compute_surv_metrics(outputs)
-            self.log("val_c_index", c_index)
-            self.log("val_ibs", ibs)
+        return self.shared_epoch_end(outputs)
     
     def test_step(self, batch, batch_idx):
         if self.global_step == 0: 
@@ -701,20 +777,7 @@ class DownstreamModel(pl.LightningModule):
         return self.shared_step(batch)
     
     def test_epoch_end(self, outputs):
-        avg_down_loss = torch.stack([x["loss"] for x in outputs]).mean()
-        self.log("test_down_loss", avg_down_loss)
-
-        if self.ds_task == 'class':
-            accuracy, precision, recall, f1, auc = self.compute_class_metrics(outputs)
-            self.log("test_accuracy", accuracy)
-            self.log("test_precision", precision)
-            self.log("test_recall", recall)
-            self.log("test_f1", f1)
-            self.log("test_auc", auc)
-        elif self.ds_task == 'surv':
-            c_index, ibs = self.compute_surv_metrics(outputs)
-            self.log("test_c_index", c_index)
-            self.log("test_ibs", ibs)
+        self.shared_epoch_end(outputs)
         if self.ds_save_latent_testing:
             sample_ids_list = []
             for x in outputs:

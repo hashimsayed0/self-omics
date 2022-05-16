@@ -105,7 +105,6 @@
                 "--cl_loss", "bce",
                 "--latent_size", "512",
                 "--batch_size", "512",
-                "--cont_loss", "none",
                 "--ae_optimizer", "adam",
                 "--ae_use_lrscheduler", "False",
                 "--mask_A", "True",
@@ -117,13 +116,13 @@
                 "--pretraining_patience", "25",
                 "--downstream_patience", "25",
                 "--pretraining_max_epochs", "100",
-                "--downstream_max_epochs", "250",
+                "--downstream_max_epochs", "150",
                 "--ae_lr", "0.001",
-                "--ds_task", "class",
+                
                 "--ds_latent_agg_method", "sum",
                 // "--ds_mask_B", "True",
                 // "--ds_masking_method", "zero",
-                // "--augment_B", "True"d,
+                // "--augment_B", "True",
 
                 "--ae_drop_p", "0.0",
                 "--ds_drop_p", "0.0",
@@ -131,18 +130,19 @@
                 "--cont_loss", "patient",
                 "--cont_loss_criterion", "barlowtwins",
                 "--cont_loss_temp", "0.1",
-                "--cont_loss_weight", "1.0",
+                "--cont_loss_weight", "0.5",
 
                 "--add_distance_loss", "True",
-                "--distance_loss_weight", "0.1",
+                "--distance_loss_weight", "0.01",
 
                 // "--use_one_decoder", "True",
                 // "--recon_all_thrice", "True",
                 // "--concat_latent_for_decoder", "True",
+                "--ds_task", "class",
                
                 "--use_test_as_val_for_downstream", "True",
                 // "--load_pretrained_ae", "True",
-                // "--pretrained_ae_path", "./checkpoints/mask_cont/fold-0/pretraining/version_31/epoch=83-step=1007.ckpt",
+                // "--pretrained_ae_path", "./checkpoints/test/fold-0/pretraining/version_24/epoch=88-step=1245.ckpt",
                 // "--ds_save_latent_testing", "True"
             ]
         },

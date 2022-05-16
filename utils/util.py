@@ -92,6 +92,10 @@ def define_callbacks_loggers_downstream(param, checkpoint_path, count):
         callback_key = 'val_accuracy'
     elif param.ds_task == 'surv':
         callback_key = 'val_c_index'
+    elif param.ds_task == 'reg':
+        callback_key = 'val_mse'
+    elif param.ds_task == 'multi':
+        callback_key = 'val_down_loss'
     param.max_epochs = param.downstream_max_epochs
     csv_logger = pl_loggers.CSVLogger(checkpoint_path, name='downstream')
     early_stopping = EarlyStopping('val_down_loss', patience=param.downstream_patience)
