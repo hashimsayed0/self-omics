@@ -88,6 +88,7 @@ def define_callbacks_loggers_pretraining(param, checkpoint_path, count):
 
 
 def define_callbacks_loggers_downstream(param, checkpoint_path, count):
+    early_stopping_key = 'val_{}_loss'.format(param.ds_task)
     if param.ds_task == 'class':
         callback_key = 'val_accuracy'
     elif param.ds_task == 'surv':
@@ -96,9 +97,10 @@ def define_callbacks_loggers_downstream(param, checkpoint_path, count):
         callback_key = 'val_mse'
     elif param.ds_task == 'multi':
         callback_key = 'val_down_loss'
+        early_stopping_key = 'val_down_loss'
     param.max_epochs = param.downstream_max_epochs
     csv_logger = pl_loggers.CSVLogger(checkpoint_path, name='downstream')
-    early_stopping = EarlyStopping('val_down_loss', patience=param.downstream_patience)
+    early_stopping = EarlyStopping(early_stopping_key, patience=param.downstream_patience)
     model_checkpoint = ModelCheckpoint(csv_logger.log_dir, monitor=callback_key, mode='max', save_top_k=1)
     # wandb_logger = pl_loggers.WandbLogger(project = 'tcga_contrastive', group = '{}-downstream'.format(param.exp_name), name = 'fold-{f}-v{v}'.format(f=count, v=csv_logger.version), offline=False)
     # return early_stopping, model_checkpoint, wandb_logger, csv_logger
