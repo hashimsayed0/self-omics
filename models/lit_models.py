@@ -215,77 +215,52 @@ class AutoEncoder(pl.LightningModule):
         for i in range(len(x)):
             x_recon_loss.append(F.mse_loss(x_recon[i], x[i]))
         return sum(x_recon_loss)
+    
+    def sum_losses(self, x_A_recon, x_B_recon, x_C_recon, x_A, x_B, x_C):
+        if self.split_A:
+            recon_A_loss = self.sum_subset_losses(x_A_recon, x_A)
+        else:
+            recon_A_loss = F.mse_loss(x_A_recon, x_A)
+        if self.split_B:
+            recon_B_loss = self.sum_subset_losses(x_B_recon, x_B)
+        else:
+            recon_B_loss = F.mse_loss(x_B_recon, x_B)
+        recon_C_loss = F.mse_loss(x_C_recon, x_C)
+        if self.mask_A and self.mask_B:
+            recon_loss = 0.4 * recon_A_loss + 0.4 * recon_B_loss + 0.2 * recon_C_loss
+        elif self.mask_A:
+            recon_loss = 0.5 * recon_A_loss + 0.25 * recon_B_loss + 0.25 * recon_C_loss 
+        elif self.mask_B:
+            recon_loss = 0.5 * recon_B_loss + 0.25 * recon_A_loss + 0.25 * recon_C_loss
+        else:
+            recon_loss = recon_A_loss + recon_B_loss + recon_C_loss
+        return recon_loss
 
     def ae_step(self, batch):
         logs = {}
         x_A, x_B, x_C = batch['x']
+        x_A_in, x_B_in = x_A, x_B
         if self.mask_A:
-            x_A_masked = self.mask_x(x_A, self.mask_A_ids)
-            h_A, h_B, h_C = self.net.encode((x_A_masked, x_B, x_C))
-            recon_list = []
-            if self.recon_all_thrice:
-                recon_list = self.net.decode((h_A, h_B, h_C))
-            else:
-                recon_list.append(self.net.decode((h_A, h_B, h_C)))
-            recon_loss = 0
-            for i, x_recon in enumerate(recon_list):
-                x_A_recon, x_B_recon, x_C_recon = x_recon
-                recon_A_loss = self.sum_subset_losses(x_A_recon, x_A)
-                if self.split_B:
-                    recon_B_loss = self.sum_subset_losses(x_B_recon, x_B)
-                
-                recon_loss_all = 0.5 * recon_A_loss + 0.25 * recon_B_loss + 0.25 * F.mse_loss(x_C_recon, x_C)
-                recon_loss += recon_loss_all
-                
-                if self.recon_all_thrice:
-                    logs['{}_recon_all_from_{}_loss'.format(self.mode, string.ascii_uppercase[i])] = recon_loss_all
-                    logs['{}_recon_A_from_{}_loss'.format(self.mode, string.ascii_uppercase[i])] = recon_A_loss
-                else:
-                    logs['{}_recon_all_loss'.format(self.mode)] = recon_loss_all
-                    logs['{}_recon_A_loss'.format(self.mode)] = recon_A_loss
-            
-            if self.recon_all_thrice:
-                logs['{}_total_recon_all_loss'.format(self.mode)] = recon_loss
-        
-        elif self.mask_B:
-            x_B_masked = self.mask_x(x_B, self.mask_B_ids)
-            h_A, h_B, h_C = self.net.encode((x_A, x_B_masked, x_C))
-            x_A_recon, x_B_recon, x_C_recon = self.net.decode((h_A, h_B, h_C))
-            recon_B_loss = self.sum_subset_losses(x_B_recon, x_B)
-            
-            recon_loss_all = 0.25 * F.mse_loss(x_A_recon, x_A) + 0.5 * recon_B_loss + 0.25 * F.mse_loss(x_C_recon, x_C)
-            recon_loss = recon_loss_all
-
-            logs['{}_recon_all_loss'.format(self.mode)] = recon_loss_all
-            logs['{}_recon_B_loss'.format(self.mode)] = recon_B_loss
-        
+            x_A_in = self.mask_x(x_A, self.mask_A_ids)
+        if self.mask_B:
+            x_B_in = self.mask_x(x_B, self.mask_B_ids)
+        h_A, h_B, h_C = self.net.encode((x_A_in, x_B_in, x_C))
+        if self.recon_all_thrice:
+            recon_list = self.net.decode((h_A, h_B, h_C))
         else:
-            h_A, h_B, h_C = self.net.encode((x_A, x_B, x_C))
-            recon_list = []
+            recon_list.append(self.net.decode((h_A, h_B, h_C)))
+        recon_loss = 0
+        for i, x_recon in enumerate(recon_list):
+            x_A_recon, x_B_recon, x_C_recon = x_recon
+            recon_loss_all = self.sum_losses(x_A_recon, x_B_recon, x_C_recon, x_A, x_B, x_C)
+            recon_loss += recon_loss_all
             if self.recon_all_thrice:
-                recon_list = self.net.decode((h_A, h_B, h_C))
+                logs['{}_recon_all_from_{}_loss'.format(self.mode, string.ascii_uppercase[i])] = recon_loss_all
             else:
-                recon_list.append(self.net.decode((h_A, h_B, h_C)))
-            recon_loss = 0
-            for i, x_recon in enumerate(recon_list):
-                x_A_recon, x_B_recon, x_C_recon = x_recon
-                if self.split_A:
-                    recon_A_loss = self.sum_subset_losses(x_A_recon, x_A)
-                else:
-                    recon_A_loss = F.mse_loss(x_A_recon, x_A)
-                if self.split_B:
-                    recon_B_loss = self.sum_subset_losses(x_B_recon, x_B)
-                
-                recon_loss_all = recon_A_loss + recon_B_loss + F.mse_loss(x_C_recon, x_C)
-                recon_loss += recon_loss_all
-                
-                if self.recon_all_thrice:
-                    logs['{}_recon_all_from_{}_loss'.format(self.mode, string.ascii_uppercase[i])] = recon_loss_all
-                else:
-                    logs['{}_recon_all_loss'.format(self.mode)] = recon_loss_all
-            
-            if self.recon_all_thrice:
-                logs['{}_total_recon_all_loss'.format(self.mode)] = recon_loss
+                logs['{}_recon_all_loss'.format(self.mode)] = recon_loss_all
+        
+        if self.recon_all_thrice:
+            logs['{}_total_recon_all_loss'.format(self.mode)] = recon_loss
         
         return logs, (h_A, h_B, h_C), recon_loss
     
