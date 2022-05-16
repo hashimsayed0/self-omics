@@ -2,7 +2,7 @@ method: grid
 metric:
   goal: maximize
   name: test_accuracy
-name: hyperopt_multi_class
+name: hyperopt_multi
 parameters:
   add_distance_loss:
     values:
@@ -13,11 +13,11 @@ parameters:
   ae_drop_p:
     values:
       - "0.0"
-  # ae_lr:
-  #   values:
-  #     - "0.0001"
-  #     - "0.01"
-  #     - "0.001"
+  ae_lr:
+    values:
+      - "0.0001"
+      - "0.01"
+      - "0.001"
   ae_net:
     values:
       - ae
@@ -44,7 +44,6 @@ parameters:
   cont_loss:
     values:
       - patient
-      # - type
   cont_loss_criterion:
     values:
       - barlowtwins
@@ -54,13 +53,13 @@ parameters:
       - "0.1"
   cont_loss_weight:
     values:
-      - "0.5"
-      # - "1.0"
-  # cont_loss_lambda:
-  #   values:
-  #     - "0.01"
-  #     - "0.001"
-  #     - "0.005"
+      # - "0.5"
+      - "1.0"
+  cont_loss_lambda:
+    values:
+      - "0.01"
+      - "0.001"
+      - "0.005"
   data_dir:
     values:
       - ./data/ABC_inter/Normalized
@@ -79,14 +78,10 @@ parameters:
       - concat
   ds_task:
     values:
-      - class
       - multi
-  ds_k_reg:
-    values:
-      - "0.001"
   exp_name:
     values:
-      - hyperopt_multi_class
+      - hyperopt_multi
   gpus:
     values:
       - "-1"
@@ -99,7 +94,6 @@ parameters:
   masking_method:
     values:
       - swap_noise
-      - gaussian_noise
       # - zero
   num_mask_A:
     values:
@@ -109,24 +103,20 @@ parameters:
     value: "4"
   one_fold:
     value: "True"
-  # pretraining_max_epochs:
-  #   values:
-  #     - "15"
-  #     - "25"
-  #     - "100"
-  #     - "50"
-  #     - "200"
-  # recon_all_thrice:
-  #   values: 
-  #     - "True"
-  #     - "False"
+  pretraining_max_epochs:
+    values:
+      # - "15"
+      # - "25"
+      - "100"
+      # - "50"
+      # - "200"
+  recon_all:
+    value: "True"
   split_A:
     value: "True"
   split_B:
     values:
       - "True"
   use_sample_list:
-    value: "True"
-  use_test_as_val_for_downstream:
     value: "True"
 program: train.py
