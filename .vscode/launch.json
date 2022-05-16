@@ -133,16 +133,17 @@
                 "--cont_loss_weight", "0.5",
 
                 "--add_distance_loss", "True",
-                "--distance_loss_weight", "0.01",
+                "--distance_loss_weight", "0.1",
 
                 // "--use_one_decoder", "True",
                 // "--recon_all_thrice", "True",
                 // "--concat_latent_for_decoder", "True",
-                "--ds_task", "class",
+                "--ds_task", "multi",
+                "--ds_k_reg", "0.001",
                
                 "--use_test_as_val_for_downstream", "True",
-                // "--load_pretrained_ae", "True",
-                // "--pretrained_ae_path", "./checkpoints/test/fold-0/pretraining/version_24/epoch=88-step=1245.ckpt",
+                "--load_pretrained_ae", "True",
+                "--pretrained_ae_path", "./checkpoints/test/fold-0/pretraining/version_24/epoch=88-step=1245.ckpt",
                 // "--ds_save_latent_testing", "True"
             ]
         },

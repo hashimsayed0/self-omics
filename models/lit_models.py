@@ -539,9 +539,9 @@ class DownstreamModel(pl.LightningModule):
         parser.add_argument("--cl_loss", type=str, default="wbce", help="Loss function to use. Options: wbce, bce")
         parser.add_argument("--ds_task", type=str, default='class', 
                             help='downstream task, options: class (classification like cancer type classification), surv (survival analysis), reg (regression like age prediction), multi (multi-task training of all 3 tasks together)')
-        parser.add_argument("--ds_k_class", type=int, default=1, help="Weight for classification loss in multi-task training")
-        parser.add_argument("--ds_k_surv", type=int, default=1, help="Weight for survival loss in multi-task training")
-        parser.add_argument("--ds_k_reg", type=int, default=1, help="Weight for regression loss in multi-task training")
+        parser.add_argument("--ds_k_class", type=float, default=1.0, help="Weight for classification loss in multi-task training")
+        parser.add_argument("--ds_k_surv", type=float, default=1.0, help="Weight for survival loss in multi-task training")
+        parser.add_argument("--ds_k_reg", type=float, default=1.0, help="Weight for regression loss in multi-task training")
         parser.add_argument('--survival_loss', type=str, default='MTLR', help='choose the survival loss')
         parser.add_argument('--survival_T_max', type=float, default=-1, help='maximum T value for survival prediction task')
         parser.add_argument('--time_num', type=int, default=256, help='number of time intervals in the survival model')
