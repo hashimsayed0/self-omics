@@ -2,7 +2,7 @@ method: grid
 metric:
   goal: maximize
   name: test_accuracy
-name: recon_all_partial_masking
+name: recon_all_partial_masking_A
 parameters:
   add_distance_loss:
     values:
@@ -81,7 +81,7 @@ parameters:
       - class
   exp_name:
     values:
-      - recon_all_partial_masking
+      - recon_all_partial_masking_A
   gpus:
     values:
       - "-1"
@@ -97,9 +97,9 @@ parameters:
       - zero
   num_mask_A:
     values:
-      - "6"
-      - "12"
-      - "18"
+      - "8"
+      - "16"
+      - "19"
       - "23"
   num_workers:
     value: "4"

@@ -109,6 +109,8 @@
                 "--ae_use_lrscheduler", "False",
                 "--mask_A", "True",
                 "--num_mask_A", "16",
+                "--mask_B", "True",
+                "--num_mask_B", "16",
                 "--masking_method", "gaussian_noise",
                 "--change_ch_to_mask_every_epoch", "True",
                 // "--choose_masking_method_every_epoch", "True",
