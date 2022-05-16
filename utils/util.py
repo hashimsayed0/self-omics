@@ -27,9 +27,9 @@ def parse_arguments():
     
     # trainer related arguments
     parser.add_argument("--exp_name", type=str, default="test")
-    parser.add_argument("--pretraining_patience", type=int, default=40)
-    parser.add_argument("--downstream_patience", type=int, default=40)
-    parser.add_argument("--pretraining_max_epochs", type=int, default=200)
+    parser.add_argument("--pretraining_patience", type=int, default=30)
+    parser.add_argument("--downstream_patience", type=int, default=30)
+    parser.add_argument("--pretraining_max_epochs", type=int, default=100)
     parser.add_argument("--downstream_max_epochs", type=int, default=150)
     
     parser = ABCDataModule.add_data_module_args(parser)
