@@ -44,6 +44,7 @@ parameters:
   cont_loss:
     values:
       - patient
+      - type
   cont_loss_criterion:
     values:
       - barlowtwins
@@ -79,6 +80,7 @@ parameters:
   ds_task:
     values:
       - multi
+      - class
   exp_name:
     values:
       - hyperopt_multi
@@ -110,8 +112,10 @@ parameters:
       - "100"
       # - "50"
       # - "200"
-  recon_all:
-    value: "True"
+  recon_all_thrice:
+    values: 
+      - "True"
+      - "False"
   split_A:
     value: "True"
   split_B:
