@@ -2,7 +2,7 @@ method: grid
 metric:
   goal: maximize
   name: test_accuracy
-name: recon_all_k_fold
+name: recon_all_drop_p_max_ep
 parameters:
   add_distance_loss:
     values:
@@ -13,6 +13,7 @@ parameters:
   ae_drop_p:
     values:
       - "0.0"
+      - "0.2"
   ae_lr:
     values:
       - "0.001"
@@ -72,23 +73,27 @@ parameters:
   ds_drop_p:
     values:
       - "0.0"
+      - "0.2"
   ds_latent_agg_method:
     values:
       - sum
       # - concat
+  # ds_lr:
+  #   values:
+  #     - "0.001"
   ds_task:
     values:
       - class
   exp_name:
     values:
-      - recon_all_k_fold
+      - recon_all_drop_p_max_ep
   fold_idx:
     values:
       - "0"
-      - "1"
-      - "2"
-      - "3"
-      - "4"
+      # - "1"
+      # - "2"
+      # - "3"
+      # - "4"
   gpus:
     values:
       - "-1"
@@ -110,11 +115,11 @@ parameters:
       # - "21"
   num_workers:
     value: "4"
-  # pretraining_max_epochs:
-  #   values:
-  #     - "15"
-  #     - "25"
-  #     - "100"
+  pretraining_max_epochs:
+    values:
+      # - "15"
+      - "25"
+      - "100"
   #     - "50"
   #     - "200"
   recon_all_thrice:
