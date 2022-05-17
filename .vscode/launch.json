@@ -107,9 +107,9 @@
                 "--ae_optimizer", "adam",
                 "--ae_use_lrscheduler", "False",
                 "--mask_A", "True",
-                "--num_mask_A", "16",
-                // "--mask_B", "True",
-                // "--num_mask_B", "16",
+                "--num_mask_A", "19",
+                "--mask_B", "True",
+                "--num_mask_B", "19",
                 "--masking_method", "gaussian_noise",
                 "--change_ch_to_mask_every_epoch", "True",
                 // "--choose_masking_method_every_epoch", "True",
@@ -134,7 +134,7 @@
                 "--cont_loss_weight", "1.0",
 
                 "--add_distance_loss_to_latent", "True",
-                "--add_distance_loss_to_proj", "True",
+                // "--add_distance_loss_to_proj", "True",
                 "--distance_loss_weight", "0.1",
 
                 // "--use_one_decoder", "True",
