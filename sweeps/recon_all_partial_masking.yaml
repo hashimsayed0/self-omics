@@ -2,9 +2,13 @@ method: grid
 metric:
   goal: maximize
   name: test_accuracy
-name: recon_all_drop_p_max_ep
+name: recon_all_dist_proj
 parameters:
-  add_distance_loss:
+  add_distance_loss_to_latent:
+    values:
+      - "False"
+      - "True"
+  add_distance_loss_to_proj:
     values:
       - "True"
   ae_dim_1A:
@@ -13,7 +17,7 @@ parameters:
   ae_drop_p:
     values:
       - "0.0"
-      - "0.2"
+      # - "0.2"
   ae_lr:
     values:
       - "0.001"
@@ -73,7 +77,7 @@ parameters:
   ds_drop_p:
     values:
       - "0.0"
-      - "0.2"
+      # - "0.2"
   ds_latent_agg_method:
     values:
       - sum
@@ -86,7 +90,7 @@ parameters:
       - class
   exp_name:
     values:
-      - recon_all_drop_p_max_ep
+      - recon_all_dist_proj
   fold_idx:
     values:
       - "0"
@@ -118,7 +122,7 @@ parameters:
   pretraining_max_epochs:
     values:
       # - "15"
-      - "25"
+      # - "25"
       - "100"
   #     - "50"
   #     - "200"

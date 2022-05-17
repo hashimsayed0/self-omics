@@ -43,7 +43,8 @@ class AutoEncoder(pl.LightningModule):
         self.cont_loss_weight = cont_loss_weight
         self.cont_loss_temp = cont_loss_temp
         self.cont_loss_lambda = cont_loss_lambda
-        self.add_distance_loss = config['add_distance_loss']
+        self.add_distance_loss_to_latent = config['add_distance_loss_to_latent']
+        self.add_distance_loss_to_proj = config['add_distance_loss_to_proj']
         self.distance_loss_weight = config['distance_loss_weight']
         self.ae_optimizer = ae_optimizer
         self.ae_use_lrscheduler = ae_use_lrscheduler
@@ -89,7 +90,7 @@ class AutoEncoder(pl.LightningModule):
             elif cont_loss_criterion == "barlowtwins":
                 self.cont_criterion = BarlowTwinsLoss(lambd=cont_loss_lambda, latent_size=latent_size, proj_size=self.projection_size)
         
-        if self.add_distance_loss:
+        if self.add_distance_loss_to_latent or self.add_distance_loss_to_proj:
             self.dist_loss = nn.MSELoss()
         if self.mask_B:
             self.mask_B_ids = np.random.randint(0, len(self.input_size_B), size=self.num_mask_B)
@@ -119,7 +120,8 @@ class AutoEncoder(pl.LightningModule):
         parser.add_argument("--cont_loss_temp", type=float, default=0.1)
         parser.add_argument("--cont_loss_lambda", type=float, default=0.0051, help="for barlowtwins")
         parser.add_argument("--cont_loss_weight", type=float, default=0.5)
-        parser.add_argument("--add_distance_loss", default=False, type=lambda x: (str(x).lower() == 'true'))
+        parser.add_argument("--add_distance_loss_to_latent", default=False, type=lambda x: (str(x).lower() == 'true'))
+        parser.add_argument("--add_distance_loss_to_proj", default=False, type=lambda x: (str(x).lower() == 'true'), help="works only when a constrastive loss is used")
         parser.add_argument("--distance_loss_weight", type=float, default=0.5)
         parser.add_argument("--ae_optimizer", type=str, default="adam", help="optimizer to use, options: adam, lars")
         parser.add_argument("--ae_use_lrscheduler", default=False, type=lambda x: (str(x).lower() == 'true'))
@@ -342,14 +344,19 @@ class AutoEncoder(pl.LightningModule):
             logs['{}_cont_{}_loss_C'.format(self.mode, self.cont_pair)] = loss_C
 
         elif self.cont_loss_criterion == "barlowtwins":
-            loss_A_B, loss_on_diag1, loss_off_diag1 = self.cont_criterion(h_A, h_B)
-            loss_B_C, loss_on_diag2, loss_off_diag2 = self.cont_criterion(h_B, h_C)
-            loss_C_A, loss_on_diag3, loss_off_diag3 = self.cont_criterion(h_C, h_A)
+            loss_A_B, loss_on_diag1, loss_off_diag1, z_A, z_B = self.cont_criterion(h_A, h_B)
+            loss_B_C, loss_on_diag2, loss_off_diag2, _, z_C = self.cont_criterion(h_B, h_C)
+            loss_C_A, loss_on_diag3, loss_off_diag3, _, _ = self.cont_criterion(h_C, h_A)
             cont_loss = (loss_A_B + loss_B_C + loss_C_A) / 3
             loss_on_diag = (loss_on_diag1 + loss_on_diag2 + loss_on_diag3) / 3
             loss_off_diag = (loss_off_diag1 + loss_off_diag2 + loss_off_diag3) / 3
             logs['{}_cont_{}_loss_on_diag'.format(self.mode, self.cont_pair)] = loss_on_diag
             logs['{}_cont_{}_loss_off_diag'.format(self.mode, self.cont_pair)] = loss_off_diag
+            if self.add_distance_loss_to_proj:
+                _, dist_loss = self.dist_step((z_A, z_B, z_C))
+                cont_loss += dist_loss * self.distance_loss_weight
+                self.log('{}_dist_loss_btw_proj'.format(self.mode), dist_loss, on_step=False, on_epoch=True)
+
         
         elif self.cont_loss_criterion == "simclr":
             z_A = self.projector(h_A)
@@ -384,10 +391,10 @@ class AutoEncoder(pl.LightningModule):
             logs, h, pretext_loss = self.vae_step(batch)
         for k, v in logs.items():
             self.log(k, v, on_step=False, on_epoch=True)
-        if self.add_distance_loss:
+        if self.add_distance_loss_to_latent:
             logs, dist_loss = self.dist_step(h)
             pretext_loss += dist_loss * self.distance_loss_weight
-            self.log('{}_dist_loss'.format(self.mode), dist_loss, on_step=False, on_epoch=True)
+            self.log('{}_dist_loss_btw_latent'.format(self.mode), dist_loss, on_step=False, on_epoch=True)
         if self.cont_loss != "none":
             if 'patient' in self.cont_loss_pairs:
                 self.cont_pair = 'patient'
@@ -415,7 +422,7 @@ class AutoEncoder(pl.LightningModule):
             logs, h, pretext_loss = self.ae_step(batch) 
         elif self.ae_net == 'vae':
             logs, h, pretext_loss = self.vae_step(batch)
-        if self.add_distance_loss:
+        if self.add_distance_loss_to_latent:
             dist_logs, dist_loss = self.dist_step(h)
             pretext_loss += dist_loss * self.distance_loss_weight
             logs['{}_dist_loss'.format(self.mode)] = dist_loss
