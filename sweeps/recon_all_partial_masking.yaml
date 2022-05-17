@@ -2,7 +2,7 @@ method: grid
 metric:
   goal: maximize
   name: test_accuracy
-name: recon_all_partial_masking_A
+name: recon_all_cont_lambda
 parameters:
   add_distance_loss:
     values:
@@ -13,10 +13,6 @@ parameters:
   ae_drop_p:
     values:
       - "0.0"
-  ae_lr:
-    values:
-      - "0.001"
-      - "0.0001"
   ae_net:
     values:
       - ae
@@ -34,7 +30,7 @@ parameters:
   change_ch_to_mask_every_epoch:
     values:
       - "True"
-      - "False"
+      # - "False"
   cl_loss:
     values:
       - bce
@@ -55,10 +51,10 @@ parameters:
     values:
       # - "0.5"
       - "1.0"
-  # cont_loss_lambda:
-  #   values:
-  #     - "0.01"
-  #     - "0.001"
+  cont_loss_lambda:
+    values:
+      - "0.01"
+      - "0.001"
   #     - "0.005"
   data_dir:
     values:
@@ -81,7 +77,7 @@ parameters:
       - class
   exp_name:
     values:
-      - recon_all_partial_masking_A
+      - recon_all_cont_lambda
   gpus:
     values:
       - "-1"
@@ -94,13 +90,13 @@ parameters:
   masking_method:
     values:
       - gaussian_noise
-      - zero
+      # - zero
   num_mask_A:
     values:
-      - "8"
-      - "16"
+      # - "18"
       - "19"
-      - "23"
+      # - "20"
+      # - "21"
   num_workers:
     value: "4"
   one_fold:
@@ -123,4 +119,8 @@ parameters:
     value: "True"
   use_test_as_val_for_downstream:
     value: "True"
+  ae_lr:
+    values:
+      - "0.001"
+      # - "0.0001"
 program: train.py
