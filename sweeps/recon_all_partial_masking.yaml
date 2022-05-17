@@ -110,8 +110,6 @@ parameters:
       # - "21"
   num_workers:
     value: "4"
-  one_fold:
-    value: "True"
   # pretraining_max_epochs:
   #   values:
   #     - "15"
