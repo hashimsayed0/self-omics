@@ -16,10 +16,8 @@ def parse_arguments():
                             help='models, settings and intermediate results are saved in folder in this directory')
     parser.add_argument('--seed', type=int, default=42,
                             help='random seed')
-    parser.add_argument("--one_fold", default=False, type=lambda x: (str(x).lower() == 'true'), 
-                            help="to use only one fold for training, by default k-fold cross validation is done")
     parser.add_argument("--fold_idx", type=int, default=0, 
-                            help="if one_fold is set to True, this is the fold_idx number")
+                            help="fold_idx for k-fold cross validation")
     parser.add_argument("--num_folds", type=int, default=5, 
                             help="number of folds for k-fold cross validation if one_fold is set to False")
     parser.add_argument("--class_0_weight", type=float, default=0.5, 

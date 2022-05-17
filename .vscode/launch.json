@@ -100,7 +100,6 @@
                 "--num_workers", "4",
                 "--ae_dim_1A", "128",
                 "--exp_name", "test",
-                "--one_fold", "True",
                 "--data_dir", "./data/ABC_inter/Normalized",
                 "--cl_loss", "bce",
                 "--latent_size", "512",
