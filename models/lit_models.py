@@ -9,7 +9,7 @@ import torch.optim as optim
 from torch.optim import lr_scheduler
 import torch.nn.functional as F
 from .networks import SimCLRProjectionHead, CLIPProjectionHead, AESepB, AESepAB, ClassifierNet, VAESepB, VAESepAB, SurvivalNet, RegressionNet
-from .losses import SimCLR_Loss, weighted_binary_cross_entropy, CLIPLoss, BarlowTwinsLoss, MTLR_survival_loss
+from .losses import SimCLR_Loss, weighted_binary_cross_entropy, CLIPLoss, BarlowTwinsLoss, MTLR_survival_loss, NTXentLoss
 from .optimizers import LARS
 from torchmetrics.functional import f1_score, auroc, precision, recall, accuracy
 from sklearn.metrics import precision_score, recall_score, f1_score
@@ -28,6 +28,7 @@ class AutoEncoder(pl.LightningModule):
         self.input_size_A = input_size_A
         self.input_size_B = input_size_B
         self.input_size_C = input_size_C
+        self.batch_size = batch_size
         self.ae_net = ae_net
         self.ae_weight_kl = ae_weight_kl
         self.latent_size = latent_size
@@ -49,6 +50,9 @@ class AutoEncoder(pl.LightningModule):
         self.ae_optimizer = ae_optimizer
         self.ae_use_lrscheduler = ae_use_lrscheduler
         self.cont_loss_criterion = cont_loss_criterion
+        self.cont_loss_similarity = config['cont_loss_similarity']
+        self.cont_loss_normalize = config['cont_loss_normalize']
+        self.cont_loss_p_norm = config['cont_loss_p_norm']
         self.cont_loss = config['cont_loss']
         self.split_A = split_A
         self.mask_A = mask_A
@@ -89,6 +93,8 @@ class AutoEncoder(pl.LightningModule):
                 self.cont_criterion = CLIPLoss(temperature = cont_loss_temp, latent_size = latent_size, proj_size = self.projection_size)
             elif cont_loss_criterion == "barlowtwins":
                 self.cont_criterion = BarlowTwinsLoss(lambd=cont_loss_lambda, latent_size=latent_size, proj_size=self.projection_size)
+            elif cont_loss_criterion == 'ntxent':
+                 self.cont_criterion = NTXentLoss(latent_dim = latent_size, temperature=cont_loss_temp, batch_size=self.batch_size, similarity=self.cont_loss_similarity, normalize=self.cont_loss_normalize, p_norm=self.cont_loss_p_norm)
         
         if self.add_distance_loss_to_latent or self.add_distance_loss_to_proj:
             self.dist_loss = nn.MSELoss()
@@ -116,7 +122,10 @@ class AutoEncoder(pl.LightningModule):
         parser.add_argument("--ae_drop_p", type=float, default=0.2)
         parser.add_argument("--cont_loss", type=str, default="none",
                             help="Contrastive loss, options: [none, patient, type (cancer type), both]")
-        parser.add_argument("--cont_loss_criterion", type=str, default="barlowtwins", help="contrastive loss to use, options: none, simclr, clip, barlowtwins")
+        parser.add_argument("--cont_loss_criterion", type=str, default="barlowtwins", help="contrastive loss to use, options: none, simclr, clip, barlowtwins, ntxent")
+        parser.add_argument("--cont_loss_similarity", type=str, default="cosine", help="similarity function to use for ntxent loss, options: [cosine, dot]")
+        parser.add_argument("--cont_loss_normalize", default=False, type=lambda x: (str(x).lower() == 'true'), help="whether to normalize ntxent loss")
+        parser.add_argument("--cont_loss_p_norm", type=float, default=2.0, help="p-norm to use for ntxent loss if cont_loss_normalize is set to true")
         parser.add_argument("--cont_loss_temp", type=float, default=0.1)
         parser.add_argument("--cont_loss_lambda", type=float, default=0.0051, help="for barlowtwins")
         parser.add_argument("--cont_loss_weight", type=float, default=0.5)
@@ -262,7 +271,7 @@ class AutoEncoder(pl.LightningModule):
                 logs['{}_recon_all_loss'.format(self.mode)] = recon_loss_all
         
         if self.recon_all_thrice:
-            logs['{}_total_recon_all_loss'.format(self.mode)] = recon_loss
+            logs['{}_total_recon_all_loss'.format(self.mode)] = recon_loss.detach()
         
         return logs, (h_A, h_B, h_C), recon_loss
     
@@ -352,11 +361,6 @@ class AutoEncoder(pl.LightningModule):
             loss_off_diag = (loss_off_diag1 + loss_off_diag2 + loss_off_diag3) / 3
             logs['{}_cont_{}_loss_on_diag'.format(self.mode, self.cont_pair)] = loss_on_diag
             logs['{}_cont_{}_loss_off_diag'.format(self.mode, self.cont_pair)] = loss_off_diag
-            if self.add_distance_loss_to_proj:
-                _, dist_loss = self.dist_step((z_A, z_B, z_C))
-                cont_loss += dist_loss * self.distance_loss_weight
-                self.log('{}_dist_loss_btw_proj'.format(self.mode), dist_loss, on_step=False, on_epoch=True)
-
         
         elif self.cont_loss_criterion == "simclr":
             z_A = self.projector(h_A)
@@ -374,8 +378,18 @@ class AutoEncoder(pl.LightningModule):
             loss_den = (loss_den1 + loss_den2 + loss_den3) / 3
             logs['{}_cont_{}_loss_num'.format(self.mode, self.cont_pair)] = loss_num
             logs['{}_cont_{}_loss_den'.format(self.mode, self.cont_pair)] = loss_den
+        
+        elif self.cont_loss_criterion == "ntxent":
+            loss_A_B, z_A, z_B = self.cont_criterion(h_A, h_B)
+            loss_B_C, _, z_C = self.cont_criterion(h_B, h_C)
+            loss_C_A, _, _ = self.cont_criterion(h_C, h_A)
+            cont_loss = loss_A_B + loss_B_C + loss_C_A
 
         logs['{}_cont_{}_loss'.format(self.mode, self.cont_pair)] = cont_loss
+        if self.add_distance_loss_to_proj:
+            _, dist_loss = self.dist_step((z_A, z_B, z_C))
+            cont_loss += dist_loss * self.distance_loss_weight
+            self.log('{}_dist_loss_btw_proj'.format(self.mode), dist_loss, on_step=False, on_epoch=True)
         return logs, cont_loss
         
     def dist_step(self, h):
@@ -396,21 +410,22 @@ class AutoEncoder(pl.LightningModule):
             pretext_loss += dist_loss * self.distance_loss_weight
             self.log('{}_dist_loss_btw_latent'.format(self.mode), dist_loss, on_step=False, on_epoch=True)
         if self.cont_loss != "none":
-            if 'patient' in self.cont_loss_pairs:
-                self.cont_pair = 'patient'
-                logs, cont_loss = self.cont_step(h)
-                for k, v in logs.items():
-                    self.log(k, v, on_step=False, on_epoch=True)
-                pretext_loss += self.cont_loss_weight * cont_loss
-            if 'type' in self.cont_loss_pairs:
-                h_list = self.prepare_cont_type_h(h, batch['y'])
-                for i, h_type in enumerate(h_list):
-                    self.cont_pair = 'type'
-                    logs, cont_loss = self.cont_step(h_type)
+            if self.cont_loss_criterion in ['none', 'barlowtwins', 'clip'] or h[0].shape[0] == self.batch_size:
+                if 'patient' in self.cont_loss_pairs:
+                    self.cont_pair = 'patient'
+                    logs, cont_loss = self.cont_step(h)
                     for k, v in logs.items():
                         self.log(k, v, on_step=False, on_epoch=True)
                     pretext_loss += self.cont_loss_weight * cont_loss
-            logs['{}_pretext_loss'.format(self.mode)] = pretext_loss
+                if 'type' in self.cont_loss_pairs:
+                    h_list = self.prepare_cont_type_h(h, batch['y'])
+                    for i, h_type in enumerate(h_list):
+                        self.cont_pair = 'type'
+                        logs, cont_loss = self.cont_step(h_type)
+                        for k, v in logs.items():
+                            self.log(k, v, on_step=False, on_epoch=True)
+                        pretext_loss += self.cont_loss_weight * cont_loss
+            self.log('{}_pretext_loss'.format(self.mode), pretext_loss, on_step=False, on_epoch=True)
         return pretext_loss
     
     def validation_step(self, batch, batch_idx):
@@ -423,23 +438,24 @@ class AutoEncoder(pl.LightningModule):
         elif self.ae_net == 'vae':
             logs, h, pretext_loss = self.vae_step(batch)
         if self.add_distance_loss_to_latent:
-            dist_logs, dist_loss = self.dist_step(h)
+            _, dist_loss = self.dist_step(h)
             pretext_loss += dist_loss * self.distance_loss_weight
             logs['{}_dist_loss'.format(self.mode)] = dist_loss
         if self.cont_loss != "none":
             cont_logs = {}
-            if 'patient' in self.cont_loss_pairs:
-                self.cont_pair = 'patient'
-                cont_pair_logs, cont_loss = self.cont_step(h)
-                cont_logs.update(cont_pair_logs)
-                pretext_loss += self.cont_loss_weight * cont_loss
-            if 'type' in self.cont_loss_pairs:
-                h_list = self.prepare_cont_type_h(h, batch['y'])
-                for i, h_type in enumerate(h_list):
-                    self.cont_pair = 'type'
-                    cont_pair_logs, cont_loss = self.cont_step(h_type)
+            if self.cont_loss_criterion in ['none', 'barlowtwins', 'clip'] or h[0].shape[0] == self.batch_size:
+                if 'patient' in self.cont_loss_pairs:
+                    self.cont_pair = 'patient'
+                    cont_pair_logs, cont_loss = self.cont_step(h)
                     cont_logs.update(cont_pair_logs)
                     pretext_loss += self.cont_loss_weight * cont_loss
+                if 'type' in self.cont_loss_pairs:
+                    h_list = self.prepare_cont_type_h(h, batch['y'])
+                    for i, h_type in enumerate(h_list):
+                        self.cont_pair = 'type'
+                        cont_pair_logs, cont_loss = self.cont_step(h_type)
+                        cont_logs.update(cont_pair_logs)
+                        pretext_loss += self.cont_loss_weight * cont_loss
             cont_logs['{}_pretext_loss'.format(self.mode)] = pretext_loss
             return {**logs, **cont_logs}
         else:
@@ -447,7 +463,7 @@ class AutoEncoder(pl.LightningModule):
 
     def validation_epoch_end(self, outputs):
         for key, value in outputs[0].items():
-            avg = torch.stack([x[key] for x in outputs]).mean()
+            avg = torch.stack([x[key] for x in outputs if key in x.keys()]).mean()
             self.log(key, avg)
         
 
