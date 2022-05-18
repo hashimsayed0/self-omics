@@ -439,6 +439,7 @@ class AutoEncoder(pl.LightningModule):
         # if self.global_step == 0: 
         #     wandb.define_metric('val_pretext_loss', summary='min')
         #     wandb.define_metric('val_recon_loss', summary='min')
+        pretext_loss = 0
         if self.ae_net == 'ae':
             logs, h, recon_loss = self.ae_step(batch) 
         elif self.ae_net == 'vae':
