@@ -276,6 +276,7 @@ class AutoEncoder(pl.LightningModule):
 
     def ae_step(self, batch):
         logs = {}
+        pretext_loss = 0
         x_A, x_B, x_C = batch['x']
         x_A_in, x_B_in = x_A, x_B
         if self.mask_A:
@@ -283,7 +284,6 @@ class AutoEncoder(pl.LightningModule):
         if self.mask_B:
             x_B_in = self.mask_x(x_B, self.mask_B_ids)
         h_A, h_B, h_C = self.net.encode((x_A_in, x_B_in, x_C))
-        mask_pred_loss = 0
         if self.predict_masked_chromosomes:
             h = torch.cat((h_A, h_B, h_C), dim=1)
             mask_y_out = self.mask_pred_net(h)
@@ -293,6 +293,7 @@ class AutoEncoder(pl.LightningModule):
             if self.mask_B:
                 mask_y[:, self.mask_B_ids] = 1
             mask_pred_loss = self.mask_pred_criterion(mask_y_out, mask_y)
+            pretext_loss += self.masked_chr_prediction_weight * mask_pred_loss
             logs['{}_mask_pred_loss'.format(self.mode)] = mask_pred_loss
         if self.recon_all_thrice:
             recon_list = self.net.decode((h_A, h_B, h_C))
@@ -307,11 +308,11 @@ class AutoEncoder(pl.LightningModule):
                 logs['{}_recon_all_from_{}_loss'.format(self.mode, string.ascii_uppercase[i])] = recon_loss_all
             else:
                 logs['{}_recon_all_loss'.format(self.mode)] = recon_loss_all
-        
+        pretext_loss += recon_loss
         if self.recon_all_thrice:
             logs['{}_total_recon_all_loss'.format(self.mode)] = recon_loss
         
-        return logs, (h_A, h_B, h_C), recon_loss + self.masked_chr_prediction_weight * mask_pred_loss
+        return logs, (h_A, h_B, h_C), pretext_loss 
     
     def vae_step(self, batch):
         logs = {}
