@@ -435,10 +435,10 @@ class AutoEncoder(pl.LightningModule):
         logs = {}
         h_A, h_B, h_C = h
         if self.distance_loss_criterion == 'bce':
-            d_A = torch.clamp(h_A, min=1e-7, max=0.9999)
-            d_B = torch.clamp(h_B, min=1e-7, max=0.9999)
-            d_C = torch.clamp(h_C, min=1e-7, max=0.9999)
-        dist_loss = self.dist_loss(d_A, d_B) + self.dist_loss(d_B, d_C) + self.dist_loss(d_C, d_A)
+            h_A = torch.clamp(h_A, min=1e-7, max=0.9999)
+            h_B = torch.clamp(h_B, min=1e-7, max=0.9999)
+            h_C = torch.clamp(h_C, min=1e-7, max=0.9999)
+        dist_loss = self.dist_loss(h_A, h_B) + self.dist_loss(h_B, h_C) + self.dist_loss(h_C, h_A)
         return logs, dist_loss
     
     def training_step(self, batch, batch_idx):
