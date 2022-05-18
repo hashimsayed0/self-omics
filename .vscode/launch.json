@@ -44,7 +44,7 @@
                 "--pretraining_patience", "35",
                 "--downstream_patience", "35",
                 "--pretraining_max_epochs", "100",
-                "--downstream_max_epochs", "150",
+                "--downstream_max_epochs", "175",
                 "--ae_lr", "0.001",
                 
                 "--ds_latent_agg_method", "sum",
@@ -57,14 +57,14 @@
 
                 "--cont_loss", "patient",
                 "--cont_loss_criterion", "ntxent",
-                "--cont_loss_similarity", "dot",
+                "--cont_loss_similarity", "cosine",
                 "--cont_loss_normalize", "True",
                 "--cont_loss_temp", "0.1",
                 "--cont_loss_weight", "1.0",
 
                 "--add_distance_loss_to_latent", "True",
                 // "--add_distance_loss_to_proj", "True",
-                "--distance_loss_weight", "1.0",
+                "--distance_loss_weight", "0.1",
 
                 // "--use_one_decoder", "True",
                 "--recon_all_thrice", "True",
