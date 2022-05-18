@@ -2,15 +2,15 @@ method: grid
 metric:
   goal: maximize
   name: test_accuracy
-name: recon_all_dist_proj
+name: recon_all_dist_tune
 parameters:
   add_distance_loss_to_latent:
     values:
-      - "False"
+      # - "False"
       - "True"
-  add_distance_loss_to_proj:
-    values:
-      - "True"
+  # add_distance_loss_to_proj:
+  #   values:
+  #     - "True"
   ae_dim_1A:
     values:
       - "128"
@@ -74,6 +74,10 @@ parameters:
       # - "0.5"
       - "0.1"
       # - "0.01"
+  distance_loss_criterion:
+    values:
+      - l1
+      - bce
   ds_drop_p:
     values:
       - "0.0"
@@ -90,7 +94,7 @@ parameters:
       - class
   exp_name:
     values:
-      - recon_all_dist_proj
+      - recon_all_dist_tune
   fold_idx:
     values:
       - "0"

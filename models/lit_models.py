@@ -97,7 +97,13 @@ class AutoEncoder(pl.LightningModule):
                  self.cont_criterion = NTXentLoss(latent_dim = latent_size, temperature=cont_loss_temp, batch_size=self.batch_size, similarity=self.cont_loss_similarity, normalize=self.cont_loss_normalize, p_norm=self.cont_loss_p_norm)
         
         if self.add_distance_loss_to_latent or self.add_distance_loss_to_proj:
-            self.dist_loss = nn.MSELoss()
+            self.distance_loss_criterion = config['distance_loss_criterion']
+            if self.distance_loss_criterion == 'mse':
+                self.dist_loss = nn.MSELoss()
+            elif self.distance_loss_criterion == 'l1':
+                self.dist_loss = nn.L1Loss()
+            elif self.distance_loss_criterion == 'bce':
+                self.dist_loss = nn.BCELoss()
         if self.mask_B:
             self.mask_B_ids = np.random.randint(0, len(self.input_size_B), size=self.num_mask_B)
         if self.mask_A:
@@ -132,6 +138,7 @@ class AutoEncoder(pl.LightningModule):
         parser.add_argument("--add_distance_loss_to_latent", default=False, type=lambda x: (str(x).lower() == 'true'))
         parser.add_argument("--add_distance_loss_to_proj", default=False, type=lambda x: (str(x).lower() == 'true'), help="works only when a constrastive loss is used")
         parser.add_argument("--distance_loss_weight", type=float, default=0.5)
+        parser.add_argument("--distance_loss_criterion", type=str, default="mse", help="distance loss to use, options: mse, bce, l1")
         parser.add_argument("--ae_optimizer", type=str, default="adam", help="optimizer to use, options: adam, lars")
         parser.add_argument("--ae_use_lrscheduler", default=False, type=lambda x: (str(x).lower() == 'true'))
         parser.add_argument("--ae_beta1", type=float, default=0.5)

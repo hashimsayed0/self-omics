@@ -132,6 +132,7 @@
                 "--add_distance_loss_to_latent", "True",
                 // "--add_distance_loss_to_proj", "True",
                 "--distance_loss_weight", "0.1",
+                "--distance_loss_criterion", "bce",
 
                 // "--use_one_decoder", "True",
                 "--recon_all_thrice", "True",
