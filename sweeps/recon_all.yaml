@@ -2,7 +2,7 @@ method: grid
 metric:
   goal: maximize
   name: test_accuracy
-name: recon_all_dist_tune
+name: recon_all_k_fold_2
 parameters:
   add_distance_loss_to_latent:
     values:
@@ -74,10 +74,13 @@ parameters:
       # - "0.5"
       - "0.1"
       # - "0.01"
-  distance_loss_criterion:
+  # distance_loss_criterion:
+  #   values:
+  #     - l1
+  #     - bce
+  downstream_max_epochs:
     values:
-      - l1
-      - bce
+      - "200"
   ds_drop_p:
     values:
       - "0.0"
@@ -94,14 +97,14 @@ parameters:
       - class
   exp_name:
     values:
-      - recon_all_dist_tune
+      - recon_all_k_fold_2
   fold_idx:
     values:
       - "0"
-      # - "1"
-      # - "2"
-      # - "3"
-      # - "4"
+      - "1"
+      - "2"
+      - "3"
+      - "4"
   gpus:
     values:
       - "-1"
@@ -132,6 +135,9 @@ parameters:
   #     - "200"
   recon_all_thrice:
     value: "True"
+  seed:
+    values:
+      - "14"
   split_A:
     value: "True"
   split_B:

@@ -2,7 +2,7 @@ method: grid
 metric:
   goal: maximize
   name: test_accuracy
-name: ntxent_k_fold
+name: ntxent_cont_type
 parameters:
   add_distance_loss_to_latent:
     values:
@@ -48,7 +48,8 @@ parameters:
   #     - "True"
   cont_loss:
     values:
-      - patient
+      - type
+      - both
   cont_loss_criterion:
     values:
       # - barlowtwins
@@ -98,6 +99,9 @@ parameters:
   #   values:
   #     - l1
   #     - bce
+  downstream_max_epochs:
+    values:
+      - "150"
   ds_drop_p:
     values:
       - "0.0"
@@ -114,14 +118,14 @@ parameters:
       - class
   exp_name:
     values:
-      - ntxent_k_fold
+      - ntxent_cont_type
   fold_idx:
     values:
       - "0"
-      - "1"
-      - "2"
-      - "3"
-      - "4"
+      # - "1"
+      # - "2"
+      # - "3"
+      # - "4"
   gpus:
     values:
       - "-1"
@@ -143,6 +147,15 @@ parameters:
       # - "21"
   num_workers:
     value: "4"
+  # predict_masked_chromosomes:
+  #   values:
+  #     - "True"
+  #     # - "False"
+  # masked_chr_prediction_weight:
+  #   values:
+  #     - "0.5"
+  #     - "0.1"
+  #     - "0.01"
   # pretraining_max_epochs:
   #   values:
   #     - "15"
