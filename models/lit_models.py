@@ -8,7 +8,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.optim import lr_scheduler
 import torch.nn.functional as F
-from .networks import SimCLRProjectionHead, CLIPProjectionHead, AESepB, AESepAB, ClassifierNet, VAESepB, VAESepAB, SurvivalNet, RegressionNet
+from .networks import SimCLRProjectionHead, CLIPProjectionHead, AESepB, AESepA, AESepAB, ClassifierNet, VAESepB, VAESepAB, SurvivalNet, RegressionNet
 from .losses import SimCLR_Loss, weighted_binary_cross_entropy, CLIPLoss, BarlowTwinsLoss, MTLR_survival_loss, NTXentLoss
 from .optimizers import LARS
 from torchmetrics.functional import f1_score, auroc, precision, recall, accuracy
@@ -69,9 +69,17 @@ class AutoEncoder(pl.LightningModule):
         
         if self.ae_net == "ae":
             if self.split_A and self.split_B:
-                self.net = AESepAB((input_size_A, input_size_B, input_size_C), latent_size, self.use_one_decoder, self.concat_latent_for_decoder, self.recon_all_thrice, dropout_p=ae_drop_p, dim_1B=ae_dim_1B, dim_2B=ae_dim_2B, dim_1A=ae_dim_1A, dim_2A=ae_dim_2A, dim_1C=ae_dim_1C, dim_2C=ae_dim_2C)
+                self.ae_dim_1B = 128
+                self.ae_dim_1A = 128
+                self.net = AESepAB((input_size_A, input_size_B, input_size_C), latent_size, self.use_one_decoder, self.concat_latent_for_decoder, self.recon_all_thrice, dropout_p=ae_drop_p, dim_1B=self.ae_dim_1B, dim_2B=ae_dim_2B, dim_1A=self.ae_dim_1A, dim_2A=ae_dim_2A, dim_1C=ae_dim_1C, dim_2C=ae_dim_2C)
+            elif self.split_A:
+                self.ae_dim_1A = 128
+                self.ae_dim_1B = 1024
+                self.net = AESepA((input_size_A, input_size_B, input_size_C), latent_size, self.use_one_decoder, self.concat_latent_for_decoder, self.recon_all_thrice, dropout_p=ae_drop_p, dim_1B=self.ae_dim_1B, dim_2B=ae_dim_2B, dim_1A=self.ae_dim_1A, dim_2A=ae_dim_2A, dim_1C=ae_dim_1C, dim_2C=ae_dim_2C)
             elif self.split_B:
-                self.net = AESepB((input_size_A, input_size_B, input_size_C), latent_size, dropout_p=ae_drop_p, dim_1B=ae_dim_1B, dim_2B=ae_dim_2B, dim_1A=ae_dim_1A, dim_2A=ae_dim_2A, dim_1C=ae_dim_1C, dim_2C=ae_dim_2C)
+                self.ae_dim_1B = 128
+                self.ae_dim_1A = 1024
+                self.net = AESepB((input_size_A, input_size_B, input_size_C), latent_size, dropout_p=ae_drop_p, dim_1B=self.ae_dim_1B, dim_2B=ae_dim_2B, dim_1A=self.ae_dim_1A, dim_2A=ae_dim_2A, dim_1C=ae_dim_1C, dim_2C=ae_dim_2C)
         elif self.ae_net == "vae":
             if self.split_A and self.split_B:
                 self.net = VAESepAB((input_size_A, input_size_B, input_size_C), latent_size, dropout_p=ae_drop_p, dim_1B=ae_dim_1B, dim_2B=ae_dim_2B, dim_1A=ae_dim_1A, dim_2A=ae_dim_2A, dim_1C=ae_dim_1C, dim_2C=ae_dim_2C)
@@ -599,6 +607,12 @@ class DownstreamModel(pl.LightningModule):
                                 help='if True, data from B will be masked')
         parser.add_argument('--ds_masking_method', type=str, default='zero',
                                 help='method to mask A, options: "zero", "gaussian_noise"')
+        parser.add_argument('--ds_class_callback_key', type=str, default='accuracy',
+                                help='key for the callback to use for classification task')
+        parser.add_argument('--ds_surv_callback_key', type=str, default='c_index',
+                                help='key for the callback to use for survival task')
+        parser.add_argument('--ds_reg_callback_key', type=str, default='mse',
+                                help='key for the callback to use for regression task')
         return parent_parser
 
     def train(self, mode=True):
@@ -807,7 +821,12 @@ class DownstreamModel(pl.LightningModule):
     
     def validation_step(self, batch, batch_idx):
         if self.global_step == 0: 
-            wandb.define_metric('val_accuracy', summary='max')
+            if 'class' in self.ds_tasks:
+                wandb.define_metric('val_accuracy', summary='max')
+                wandb.define_metric('val_precision', summary='max')
+                wandb.define_metric('val_recall', summary='max')
+                wandb.define_metric('val_f1', summary='max')
+                wandb.define_metric('val_auc', summary='max')
         return self.shared_step(batch)
 
     def validation_epoch_end(self, outputs):

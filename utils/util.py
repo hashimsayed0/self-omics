@@ -28,7 +28,7 @@ def parse_arguments():
     parser.add_argument("--pretraining_patience", type=int, default=35)
     parser.add_argument("--downstream_patience", type=int, default=35)
     parser.add_argument("--pretraining_max_epochs", type=int, default=100)
-    parser.add_argument("--downstream_max_epochs", type=int, default=150)
+    parser.add_argument("--downstream_max_epochs", type=int, default=175)
     
     parser = ABCDataModule.add_data_module_args(parser)
     parser = AutoEncoder.add_model_specific_args(parser)
@@ -88,11 +88,11 @@ def define_callbacks_loggers_pretraining(param, checkpoint_path, count):
 def define_callbacks_loggers_downstream(param, checkpoint_path, count):
     early_stopping_key = 'val_{}_loss'.format(param.ds_task)
     if param.ds_task == 'class':
-        callback_key = 'val_accuracy'
+        callback_key = 'val_{}'.format(param.ds_class_callback_key)
     elif param.ds_task == 'surv':
-        callback_key = 'val_c_index'
+        callback_key = 'val_{}'.format(param.ds_surv_callback_key)
     elif param.ds_task == 'reg':
-        callback_key = 'val_mse'
+        callback_key = 'val_{}'.format(param.ds_reg_callback_key)
     elif param.ds_task == 'multi':
         callback_key = 'val_down_loss'
         early_stopping_key = 'val_down_loss'
