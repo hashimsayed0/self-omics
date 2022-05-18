@@ -402,7 +402,10 @@ class AutoEncoder(pl.LightningModule):
     def dist_step(self, h):
         logs = {}
         h_A, h_B, h_C = h
-        dist_loss = self.dist_loss(h_A, h_B) + self.dist_loss(h_B, h_C) + self.dist_loss(h_C, h_A)
+        d_A = torch.clamp(h_A, min=0, max=1)
+        d_B = torch.clamp(h_B, min=0, max=1)
+        d_C = torch.clamp(h_C, min=0, max=1)
+        dist_loss = self.dist_loss(d_A, d_B) + self.dist_loss(d_B, d_C) + self.dist_loss(d_C, d_A)
         return logs, dist_loss
     
     def training_step(self, batch, batch_idx):
