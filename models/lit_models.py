@@ -65,6 +65,7 @@ class AutoEncoder(pl.LightningModule):
         self.use_one_decoder = config['use_one_decoder']
         self.concat_latent_for_decoder = config['concat_latent_for_decoder']
         self.recon_all_thrice = config['recon_all_thrice']
+        self.predict_masked_chromosomes = config['predict_masked_chromosomes']
         
         if self.ae_net == "ae":
             if self.split_A and self.split_B:
@@ -104,12 +105,27 @@ class AutoEncoder(pl.LightningModule):
                 self.dist_loss = nn.L1Loss()
             elif self.distance_loss_criterion == 'bce':
                 self.dist_loss = nn.BCELoss()
+        
         if self.mask_B:
             self.mask_B_ids = np.random.randint(0, len(self.input_size_B), size=self.num_mask_B)
         if self.mask_A:
             self.mask_A_ids = np.random.randint(0, len(self.input_size_A), size=self.num_mask_A)
         
         self.change_ch_to_mask_every_epoch = config['change_ch_to_mask_every_epoch']
+
+        if self.predict_masked_chromosomes:
+            num_mask_total = 1
+            if self.split_A:
+                num_mask_total += len(self.input_size_A)
+            else:
+                num_mask_total += 1
+            if self.split_B:
+                num_mask_total += len(self.input_size_B)
+            else:
+                num_mask_total += 1
+            self.masked_chr_prediction_weight = config['masked_chr_prediction_weight']
+            self.mask_pred_net = ClassifierNet(num_mask_total, latent_size * 3, dropout_p=ae_drop_p)
+            self.mask_pred_criterion = nn.CrossEntropyLoss()
 
         self.save_hyperparameters()
 
@@ -170,6 +186,10 @@ class AutoEncoder(pl.LightningModule):
                                 help='if True, the masking method is chosen randomly each epoch and "masking_method" argument is ignored')
         parser.add_argument('--change_ch_to_mask_every_epoch', default=False, type=lambda x: (str(x).lower() == 'true'),
                                 help='if True, the chromosomes to mask are changed each epoch')
+        parser.add_argument('--predict_masked_chromosomes', default=False, type=lambda x: (str(x).lower() == 'true'),
+                                help='if True, the chromosomes that are masked will be predicted')
+        parser.add_argument('--masked_chr_prediction_weight', type=float, default=0.5,
+                                help='weight of masked chromosomes prediction loss')
         parser.add_argument('--recon_all_thrice', default=False, type=lambda x: (str(x).lower() == 'true'),
                                 help='if True, modalities A, B and C will be reconstructed from latent representations of each A, B and C modalities')
         parser.add_argument('--use_one_decoder', default=False, type=lambda x: (str(x).lower() == 'true'),
@@ -263,6 +283,17 @@ class AutoEncoder(pl.LightningModule):
         if self.mask_B:
             x_B_in = self.mask_x(x_B, self.mask_B_ids)
         h_A, h_B, h_C = self.net.encode((x_A_in, x_B_in, x_C))
+        mask_pred_loss = 0
+        if self.predict_masked_chromosomes:
+            h = torch.cat((h_A, h_B, h_C), dim=1)
+            mask_y_out = self.mask_pred_net(h)
+            mask_y = torch.zeros(mask_y_out.shape).to(self.device)
+            if self.mask_A:
+                mask_y[:, self.mask_A_ids] = 1
+            if self.mask_B:
+                mask_y[:, self.mask_B_ids] = 1
+            mask_pred_loss = self.mask_pred_criterion(mask_y_out, mask_y)
+            logs['{}_mask_pred_loss'.format(self.mode)] = mask_pred_loss
         if self.recon_all_thrice:
             recon_list = self.net.decode((h_A, h_B, h_C))
         else:
@@ -280,7 +311,7 @@ class AutoEncoder(pl.LightningModule):
         if self.recon_all_thrice:
             logs['{}_total_recon_all_loss'.format(self.mode)] = recon_loss
         
-        return logs, (h_A, h_B, h_C), recon_loss
+        return logs, (h_A, h_B, h_C), recon_loss + self.masked_chr_prediction_weight * mask_pred_loss
     
     def vae_step(self, batch):
         logs = {}
@@ -402,9 +433,10 @@ class AutoEncoder(pl.LightningModule):
     def dist_step(self, h):
         logs = {}
         h_A, h_B, h_C = h
-        d_A = torch.clamp(h_A, min=0, max=1)
-        d_B = torch.clamp(h_B, min=0, max=1)
-        d_C = torch.clamp(h_C, min=0, max=1)
+        if self.distance_loss_criterion == 'bce':
+            d_A = torch.clamp(h_A, min=1e-7, max=0.9999)
+            d_B = torch.clamp(h_B, min=1e-7, max=0.9999)
+            d_C = torch.clamp(h_C, min=1e-7, max=0.9999)
         dist_loss = self.dist_loss(d_A, d_B) + self.dist_loss(d_B, d_C) + self.dist_loss(d_C, d_A)
         return logs, dist_loss
     
