@@ -271,7 +271,7 @@ class AutoEncoder(pl.LightningModule):
                 logs['{}_recon_all_loss'.format(self.mode)] = recon_loss_all
         
         if self.recon_all_thrice:
-            logs['{}_total_recon_all_loss'.format(self.mode)] = recon_loss.detach()
+            logs['{}_total_recon_all_loss'.format(self.mode)] = recon_loss
         
         return logs, (h_A, h_B, h_C), recon_loss
     
@@ -432,11 +432,11 @@ class AutoEncoder(pl.LightningModule):
         # if self.global_step == 0: 
         #     wandb.define_metric('val_pretext_loss', summary='min')
         #     wandb.define_metric('val_recon_loss', summary='min')
-        
         if self.ae_net == 'ae':
-            logs, h, pretext_loss = self.ae_step(batch) 
+            logs, h, recon_loss = self.ae_step(batch) 
         elif self.ae_net == 'vae':
-            logs, h, pretext_loss = self.vae_step(batch)
+            logs, h, recon_loss = self.vae_step(batch)
+        pretext_loss += recon_loss
         if self.add_distance_loss_to_latent:
             _, dist_loss = self.dist_step(h)
             pretext_loss += dist_loss * self.distance_loss_weight
