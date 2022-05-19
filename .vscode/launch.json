@@ -145,14 +145,15 @@
                 // "--use_one_decoder", "True",
                 "--recon_all_thrice", "True",
                 // "--concat_latent_for_decoder", "True",
-                "--use_rep_trick", "True",
+                // "--use_rep_trick", "True",
 
                 "--ds_task", "class",
                 // "--ds_k_reg", "0.001",
+                "--ds_add_omics_identity", "True",
                
                 "--use_test_as_val_for_downstream", "True",
-                "--load_pretrained_ae", "True",
-                "--pretrained_ae_path", "/l/users/sayed.hashim/files/Research/Methods/contrastive-tcga/debug/contrastive-omics/checkpoints/test/fold-0/pretraining/version_9/epoch=30-step=433.ckpt",
+                // "--load_pretrained_ae", "True",
+                // "--pretrained_ae_path", "./checkpoints/test/fold-0/pretraining/version_10/epoch=0-step=13.ckpt",
                 // "--ds_save_latent_testing", "True"
             ]
         },
