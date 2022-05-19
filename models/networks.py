@@ -537,7 +537,7 @@ class AESepAB(nn.Module):
         Defines a fully-connected variational autoencoder for multi-omics dataset
         DNA methylation input separated by chromosome
     """
-    def __init__(self, input_sizes, latent_size, use_one_decoder, concat_latent_for_decoder, recon_all_thrice, norm_layer=nn.BatchNorm1d, leaky_slope=0.2, dropout_p=0, dim_1B=128, dim_2B=1024,
+    def __init__(self, input_sizes, latent_size, use_one_decoder, concat_latent_for_decoder, recon_all_thrice, use_rep_trick, norm_layer=nn.BatchNorm1d, leaky_slope=0.2, dropout_p=0, dim_1B=128, dim_2B=1024,
                  dim_1A=128, dim_2A=1024, dim_1C=1024, dim_2C=1024, dim_2 = 2048, dim_1=1024):
         """
             Construct a fully-connected variational autoencoder
@@ -559,6 +559,7 @@ class AESepAB(nn.Module):
         self.use_one_decoder = use_one_decoder
         self.concat_latent_for_decoder = concat_latent_for_decoder
         self.recon_all_thrice = recon_all_thrice
+        self.use_rep_trick = use_rep_trick
 
         # ENCODER
         # Layer 1
@@ -591,6 +592,20 @@ class AESepAB(nn.Module):
         self.encode_fc_3C = FCBlock(dim_2C, latent_size, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=0,
                                         activation=False, normalization=False)   
 
+        if self.use_rep_trick:
+            # Layer 4
+            self.encode_fc_B_mean = FCBlock(latent_size, latent_size, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=0,
+                                        activation=False, normalization=False)
+            self.encode_fc_B_log_var = FCBlock(latent_size, latent_size, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=0,
+                                            activation=False, normalization=False)
+            self.encode_fc_A_mean = FCBlock(latent_size, latent_size, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=0,
+                                        activation=False, normalization=False)
+            self.encode_fc_A_log_var = FCBlock(latent_size, latent_size, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=0,
+                                            activation=False, normalization=False)
+            self.encode_fc_C_mean = FCBlock(latent_size, latent_size, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=0,
+                                        activation=False, normalization=False)
+            self.encode_fc_C_log_var = FCBlock(latent_size, latent_size, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=0,
+                                            activation=False, normalization=False)
         # DECODER
         # Layer 1
         if self.concat_latent_for_decoder:
@@ -713,8 +728,25 @@ class AESepAB(nn.Module):
         h_B = self.encode_fc_3B(level_3_B)
         h_A = self.encode_fc_3A(level_3_A)
         h_C = self.encode_fc_3C(level_3_C)
-
-        return h_A, h_B, h_C
+        
+        if self.use_rep_trick:
+            h_A_mean = self.encode_fc_A_mean(h_A)
+            h_A_var = self.encode_fc_A_log_var(h_A)
+            h_B_mean = self.encode_fc_B_mean(h_B)
+            h_B_var = self.encode_fc_B_log_var(h_B)
+            h_C_mean = self.encode_fc_C_mean(h_C)
+            h_C_var = self.encode_fc_C_log_var(h_C)
+            z_A = self.reparameterize(h_A_mean, h_A_var)
+            z_B = self.reparameterize(h_B_mean, h_B_var)
+            z_C = self.reparameterize(h_C_mean, h_C_var)
+            return z_A, z_B, z_C
+        else:
+            return h_A, h_B, h_C
+    
+    def reparameterize(self, mean, log_var):
+        std = torch.exp(0.5 * log_var)
+        eps = torch.randn_like(std)
+        return eps.mul(std).add_(mean)
 
     def decode(self, h):
         if self.use_one_decoder:

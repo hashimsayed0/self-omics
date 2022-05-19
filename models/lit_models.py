@@ -66,12 +66,12 @@ class AutoEncoder(pl.LightningModule):
         self.concat_latent_for_decoder = config['concat_latent_for_decoder']
         self.recon_all_thrice = config['recon_all_thrice']
         self.predict_masked_chromosomes = config['predict_masked_chromosomes']
-        
+        self.use_rep_trick = config['use_rep_trick']
         if self.ae_net == "ae":
             if self.split_A and self.split_B:
                 self.ae_dim_1B = 128
                 self.ae_dim_1A = 128
-                self.net = AESepAB((input_size_A, input_size_B, input_size_C), latent_size, self.use_one_decoder, self.concat_latent_for_decoder, self.recon_all_thrice, dropout_p=ae_drop_p, dim_1B=self.ae_dim_1B, dim_2B=ae_dim_2B, dim_1A=self.ae_dim_1A, dim_2A=ae_dim_2A, dim_1C=ae_dim_1C, dim_2C=ae_dim_2C)
+                self.net = AESepAB((input_size_A, input_size_B, input_size_C), latent_size, self.use_one_decoder, self.concat_latent_for_decoder, self.recon_all_thrice, self.use_rep_trick, dropout_p=ae_drop_p, dim_1B=self.ae_dim_1B, dim_2B=ae_dim_2B, dim_1A=self.ae_dim_1A, dim_2A=ae_dim_2A, dim_1C=ae_dim_1C, dim_2C=ae_dim_2C)
             elif self.split_A:
                 self.ae_dim_1A = 128
                 self.ae_dim_1B = 1024
@@ -204,6 +204,8 @@ class AutoEncoder(pl.LightningModule):
                                 help='if True, only one decoder is used to reconstruct all modalities')
         parser.add_argument('--concat_latent_for_decoder', default=False, type=lambda x: (str(x).lower() == 'true'),
                                 help='if True, latent vectors from A, B and C are concatenated before being fed into the decoder')
+        parser.add_argument('--use_rep_trick', default=False, type=lambda x: (str(x).lower() == 'true'),
+                                help='use reparameterization in trick in ae')
         return parent_parser
 
     def forward(self, x):
