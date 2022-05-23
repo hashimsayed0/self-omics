@@ -138,6 +138,9 @@ parameters:
   seed:
     values:
       - "14"
+      - "7"
+      - "6"
+      - "10"
   split_A:
     value: "True"
   split_B:
