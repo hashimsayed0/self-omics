@@ -12,7 +12,7 @@
             "console": "integratedTerminal"
         },
         {
-            "name": "mask_ae",
+            "name": "mask_ae_simsiam",
             "type": "python",
             "request": "launch",
             "program": "./train.py",
@@ -59,10 +59,10 @@
                 "--ds_drop_p", "0.0",
 
                 "--cont_loss", "patient",
-                "--cont_loss_criterion", "ntxent",
-                "--cont_loss_similarity", "cosine",
-                "--cont_loss_normalize", "True",
-                "--cont_loss_temp", "0.3",
+                "--cont_loss_criterion", "simsiam",
+                // "--cont_loss_similarity", "cosine",
+                // "--cont_loss_normalize", "True",
+                // "--cont_loss_temp", "0.3",
                 "--cont_loss_weight", "1.0",
 
                 "--add_distance_loss_to_latent", "True",

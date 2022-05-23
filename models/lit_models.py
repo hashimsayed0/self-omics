@@ -9,7 +9,7 @@ import torch.optim as optim
 from torch.optim import lr_scheduler
 import torch.nn.functional as F
 from .networks import SimCLRProjectionHead, CLIPProjectionHead, AESepB, AESepA, AESepAB, ClassifierNet, VAESepB, VAESepAB, SurvivalNet, RegressionNet
-from .losses import SimCLR_Loss, weighted_binary_cross_entropy, CLIPLoss, BarlowTwinsLoss, MTLR_survival_loss, NTXentLoss
+from .losses import SimCLR_Loss, weighted_binary_cross_entropy, CLIPLoss, BarlowTwinsLoss, MTLR_survival_loss, NTXentLoss, SimSiamLoss
 from .optimizers import LARS
 from torchmetrics.functional import f1_score, auroc, precision, recall, accuracy
 from sklearn.metrics import precision_score, recall_score, f1_score
@@ -103,7 +103,9 @@ class AutoEncoder(pl.LightningModule):
             elif cont_loss_criterion == "barlowtwins":
                 self.cont_criterion = BarlowTwinsLoss(lambd=cont_loss_lambda, latent_size=latent_size, proj_size=self.projection_size)
             elif cont_loss_criterion == 'ntxent':
-                 self.cont_criterion = NTXentLoss(latent_dim = latent_size, temperature=cont_loss_temp, batch_size=self.batch_size, similarity=self.cont_loss_similarity, normalize=self.cont_loss_normalize, p_norm=self.cont_loss_p_norm)
+                self.cont_criterion = NTXentLoss(latent_dim = latent_size, temperature=cont_loss_temp, batch_size=self.batch_size, similarity=self.cont_loss_similarity, normalize=self.cont_loss_normalize, p_norm=self.cont_loss_p_norm)
+            elif cont_loss_criterion == 'simsiam':
+                self.cont_criterion = SimSiamLoss(latent_dim=latent_size)
         
         if self.add_distance_loss_to_latent or self.add_distance_loss_to_proj:
             self.distance_loss_criterion = config['distance_loss_criterion']
@@ -152,7 +154,7 @@ class AutoEncoder(pl.LightningModule):
         parser.add_argument("--ae_drop_p", type=float, default=0.2)
         parser.add_argument("--cont_loss", type=str, default="none",
                             help="Contrastive loss, options: [none, patient, type (cancer type), both]")
-        parser.add_argument("--cont_loss_criterion", type=str, default="barlowtwins", help="contrastive loss to use, options: none, simclr, clip, barlowtwins, ntxent")
+        parser.add_argument("--cont_loss_criterion", type=str, default="barlowtwins", help="contrastive loss to use, options: none, simclr, clip, barlowtwins, ntxent, simsiam")
         parser.add_argument("--cont_loss_similarity", type=str, default="cosine", help="similarity function to use for ntxent loss, options: [cosine, dot]")
         parser.add_argument("--cont_loss_normalize", default=False, type=lambda x: (str(x).lower() == 'true'), help="whether to normalize ntxent loss")
         parser.add_argument("--cont_loss_p_norm", type=float, default=2.0, help="p-norm to use for ntxent loss if cont_loss_normalize is set to true")
@@ -433,6 +435,9 @@ class AutoEncoder(pl.LightningModule):
             loss_B_C, _, z_C = self.cont_criterion(h_B, h_C)
             loss_C_A, _, _ = self.cont_criterion(h_C, h_A)
             cont_loss = loss_A_B + loss_B_C + loss_C_A
+        
+        elif self.cont_loss_criterion == "simsiam":
+            cont_loss, z_A, z_B, z_C = self.cont_criterion(h_A, h_B, h_C)
 
         logs['{}_cont_{}_loss'.format(self.mode, self.cont_pair)] = cont_loss
         if self.add_distance_loss_to_proj:
