@@ -66,12 +66,12 @@ class AutoEncoder(pl.LightningModule):
         self.concat_latent_for_decoder = config['concat_latent_for_decoder']
         self.recon_all_thrice = config['recon_all_thrice']
         self.predict_masked_chromosomes = config['predict_masked_chromosomes']
-        
+        self.use_rep_trick = config['use_rep_trick']
         if self.ae_net == "ae":
             if self.split_A and self.split_B:
                 self.ae_dim_1B = 128
                 self.ae_dim_1A = 128
-                self.net = AESepAB((input_size_A, input_size_B, input_size_C), latent_size, self.use_one_decoder, self.concat_latent_for_decoder, self.recon_all_thrice, dropout_p=ae_drop_p, dim_1B=self.ae_dim_1B, dim_2B=ae_dim_2B, dim_1A=self.ae_dim_1A, dim_2A=ae_dim_2A, dim_1C=ae_dim_1C, dim_2C=ae_dim_2C)
+                self.net = AESepAB((input_size_A, input_size_B, input_size_C), latent_size, self.use_one_decoder, self.concat_latent_for_decoder, self.recon_all_thrice, self.use_rep_trick, dropout_p=ae_drop_p, dim_1B=self.ae_dim_1B, dim_2B=ae_dim_2B, dim_1A=self.ae_dim_1A, dim_2A=ae_dim_2A, dim_1C=ae_dim_1C, dim_2C=ae_dim_2C)
             elif self.split_A:
                 self.ae_dim_1A = 128
                 self.ae_dim_1B = 1024
@@ -204,6 +204,8 @@ class AutoEncoder(pl.LightningModule):
                                 help='if True, only one decoder is used to reconstruct all modalities')
         parser.add_argument('--concat_latent_for_decoder', default=False, type=lambda x: (str(x).lower() == 'true'),
                                 help='if True, latent vectors from A, B and C are concatenated before being fed into the decoder')
+        parser.add_argument('--use_rep_trick', default=False, type=lambda x: (str(x).lower() == 'true'),
+                                help='use reparameterization in trick in ae')
         return parent_parser
 
     def forward(self, x):
@@ -552,6 +554,10 @@ class DownstreamModel(pl.LightningModule):
         if config['ds_freeze_ae'] == True:
             self.feature_extractor.freeze()
         self.ds_latent_agg_method = config['ds_latent_agg_method']
+        self.ds_add_omics_identity = config['ds_add_omics_identity']
+        if self.ds_add_omics_identity:
+            self.ds_latent_agg_method = 'all'
+            latent_size += 3
         if self.ds_latent_agg_method == 'concat':
             latent_size *= 3
         if 'class' in self.ds_tasks:
@@ -570,6 +576,7 @@ class DownstreamModel(pl.LightningModule):
         if 'reg' in self.ds_tasks:
             self.reg_net = RegressionNet(latent_size, dropout_p=ds_drop_p)
             self.reg_loss = nn.MSELoss()
+
         self.save_hyperparameters()
 
     @staticmethod
@@ -596,7 +603,7 @@ class DownstreamModel(pl.LightningModule):
         parser.add_argument('--survival_T_max', type=float, default=-1, help='maximum T value for survival prediction task')
         parser.add_argument('--time_num', type=int, default=256, help='number of time intervals in the survival model')
         parser.add_argument('--ds_latent_agg_method', type=str, default='mean',
-                                help='method to aggregate latent representations from autoencoders of A, B and C, options: "mean", "concat", "sum"')
+                                help='method to aggregate latent representations from autoencoders of A, B and C, options: "mean", "concat", "sum", "all" (pass all latents one by one)')
         parser.add_argument('--ds_freeze_ae', default=False, type=lambda x: (str(x).lower() == 'true'),
                                 help='whether to freeze the autoencoder for downstream model')
         parser.add_argument('--ds_save_latent_testing', default=False, type=lambda x: (str(x).lower() == 'true'),
@@ -613,6 +620,8 @@ class DownstreamModel(pl.LightningModule):
                                 help='key for the callback to use for survival task')
         parser.add_argument('--ds_reg_callback_key', type=str, default='mse',
                                 help='key for the callback to use for regression task')
+        parser.add_argument('--ds_add_omics_identity', default=False, type=lambda x: (str(x).lower() == 'true'),
+                                help='add omics id to latent representations before using them for classification task')
         return parent_parser
 
     def train(self, mode=True):
@@ -635,6 +644,8 @@ class DownstreamModel(pl.LightningModule):
                 h = torch.mean(torch.stack([h_A, h_B, h_C]), axis=0)
             elif self.ds_latent_agg_method == 'sum':
                 h = torch.sum(torch.stack([h_A, h_B, h_C]), axis=0)
+            elif self.ds_latent_agg_method == 'all':
+                h = [h_A, h_B, h_C]
         elif self.ae_net == 'vae':
             h, _, _, _ = self.feature_extractor(x)
         return h
@@ -681,14 +692,34 @@ class DownstreamModel(pl.LightningModule):
         if self.ds_mask_B:
             x_B = self.mask_x(x_B)
         h = self.forward((x_A, x_B, x_C))
-        y_out = self.class_net(h)
-        if self.cl_loss == "wbce":
-            down_loss = self.wbce(y_out, y, self.class_weights)
-        elif self.cl_loss == "bce":
-            down_loss = self.criterion(y_out, y)
-        y_true = y.long()
-        y_prob = F.softmax(y_out, dim=1)
-        _, y_pred = torch.max(y_prob, 1)
+        if self.ds_add_omics_identity:
+            down_loss = 0
+            y_prob_omic = []
+            for i, h_omic in enumerate(h):
+                omic_id = torch.zeros((h_omic.shape[0], len(h))).to(self.device)
+                omic_id[:, i] = 1
+                h_omic = torch.cat([h_omic, omic_id], dim=1)
+                y_out_omic = self.class_net(h_omic)
+                if self.cl_loss == "wbce":
+                    down_loss += self.wbce(y_out_omic, y, self.class_weights)
+                elif self.cl_loss == "bce":
+                    down_loss += self.criterion(y_out_omic, y)
+                y_true = y.long()
+                y_prob_omic.append(F.softmax(y_out_omic, dim=1))
+            y_prob = torch.mean(torch.stack(y_prob_omic), axis=0)
+            _, y_pred = torch.max(y_prob, 1)
+            h = torch.cat(h, dim=1)
+            
+        else:
+            y_out = self.class_net(h)
+            if self.cl_loss == "wbce":
+                down_loss = self.wbce(y_out, y, self.class_weights)
+            elif self.cl_loss == "bce":
+                down_loss = self.criterion(y_out, y)
+            y_true = y.long()
+            y_prob = F.softmax(y_out, dim=1)
+            _, y_pred = torch.max(y_prob, 1)
+            
         return {
             "class_loss": down_loss,
             "sample_ids": sample_ids,

@@ -72,6 +72,7 @@
                 // "--use_one_decoder", "True",
                 "--recon_all_thrice", "True",
                 // "--concat_latent_for_decoder", "True",
+                
                 "--ds_task", "class",
                 // "--ds_k_reg", "0.001",
                 // "--ds_class_callback_key", "f1",
@@ -111,8 +112,8 @@
                 "--masking_method", "gaussian_noise",
                 "--change_ch_to_mask_every_epoch", "True",
                 // "--choose_masking_method_every_epoch", "True",
-                "--predict_masked_chromosomes", "True",
-                "--masked_chr_prediction_weight", "1.0",
+                // "--predict_masked_chromosomes", "True",
+                // "--masked_chr_prediction_weight", "1.0",
                 
                 "--ae_net", "ae",
                 "--pretraining_patience", "35",
@@ -144,12 +145,15 @@
                 // "--use_one_decoder", "True",
                 "--recon_all_thrice", "True",
                 // "--concat_latent_for_decoder", "True",
+                // "--use_rep_trick", "True",
+
                 "--ds_task", "class",
-                "--ds_k_reg", "0.001",
+                // "--ds_k_reg", "0.001",
+                "--ds_add_omics_identity", "True",
                
                 "--use_test_as_val_for_downstream", "True",
                 // "--load_pretrained_ae", "True",
-                // "--pretrained_ae_path", "./checkpoints/test/fold-0/pretraining/version_29/epoch=49-step=699.ckpt",
+                // "--pretrained_ae_path", "./checkpoints/test/fold-0/pretraining/version_10/epoch=0-step=13.ckpt",
                 // "--ds_save_latent_testing", "True"
             ]
         },
