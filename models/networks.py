@@ -537,7 +537,7 @@ class AESepAB(nn.Module):
         Defines a fully-connected variational autoencoder for multi-omics dataset
         DNA methylation input separated by chromosome
     """
-    def __init__(self, input_sizes, latent_size, use_one_decoder, concat_latent_for_decoder, recon_all_thrice, use_rep_trick, norm_layer=nn.BatchNorm1d, leaky_slope=0.2, dropout_p=0, dim_1B=128, dim_2B=1024,
+    def __init__(self, input_sizes, latent_size, use_one_encoder, use_one_decoder, concat_latent_for_decoder, recon_all_thrice, use_rep_trick, norm_layer=nn.BatchNorm1d, leaky_slope=0.2, dropout_p=0, dim_1B=128, dim_2B=1024,
                  dim_1A=128, dim_2A=1024, dim_1C=1024, dim_2C=1024, dim_2 = 2048, dim_1=1024):
         """
             Construct a fully-connected variational autoencoder
@@ -556,41 +556,64 @@ class AESepAB(nn.Module):
         self.C_dim = input_sizes[2]
         self.dim_1B = dim_1B
         self.dim_1A = dim_1A
+        self.use_one_encoder = use_one_encoder
         self.use_one_decoder = use_one_decoder
         self.concat_latent_for_decoder = concat_latent_for_decoder
         self.recon_all_thrice = recon_all_thrice
         self.use_rep_trick = use_rep_trick
 
         # ENCODER
-        # Layer 1
-        self.encode_fc_1B_list = nn.ModuleList()
-        for i in range(0, 23):
-            self.encode_fc_1B_list.append(
-                FCBlock(self.B_dim_list[i], dim_1B, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=dropout_p,
-                        activation=True))
-        self.encode_fc_1A_list = nn.ModuleList()
-        for i in range(0, 23):
-            self.encode_fc_1A_list.append(
-                FCBlock(self.A_dim_list[i], dim_1A, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=dropout_p,
-                        activation=True))
-        self.encode_fc_1C = FCBlock(self.C_dim, dim_1C, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=dropout_p,
-                                    activation=True)
+        if self.use_one_encoder:
+            # Layer 1
+            self.encode_fc_1B_list = nn.ModuleList()
+            for i in range(0, 23):
+                self.encode_fc_1B_list.append(
+                    FCBlock(self.B_dim_list[i], dim_1B, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=dropout_p,
+                            activation=True))
+            self.encode_fc_1A_list = nn.ModuleList()
+            for i in range(0, 23):
+                self.encode_fc_1A_list.append(
+                    FCBlock(self.A_dim_list[i], dim_1B, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=dropout_p,
+                            activation=True))
+            self.encode_fc_1C = FCBlock(self.C_dim, dim_1B * 23, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=dropout_p,
+                                        activation=True)
+            # Layer 2
+            self.encode_fc_2 = FCBlock(dim_1B * 23, dim_2, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=dropout_p,
+                                        activation=True)
+            # Layer 3
+            self.encode_fc_3 = FCBlock(dim_2, latent_size, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=dropout_p,
+                                        activation=False)
+            
+        else:
+            # Layer 1
+            self.encode_fc_1B_list = nn.ModuleList()
+            for i in range(0, 23):
+                self.encode_fc_1B_list.append(
+                    FCBlock(self.B_dim_list[i], dim_1B, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=dropout_p,
+                            activation=True))
+            self.encode_fc_1A_list = nn.ModuleList()
+            for i in range(0, 23):
+                self.encode_fc_1A_list.append(
+                    FCBlock(self.A_dim_list[i], dim_1A, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=dropout_p,
+                            activation=True))
+            self.encode_fc_1C = FCBlock(self.C_dim, dim_1C, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=dropout_p,
+                                        activation=True)
 
-        # Layer 2
-        self.encode_fc_2B = FCBlock(dim_1B*23, dim_2B, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=dropout_p,
-                                    activation=True)
-        self.encode_fc_2A = FCBlock(dim_1A*23, dim_2A, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=dropout_p,
-                                    activation=True)
-        self.encode_fc_2C = FCBlock(dim_1C, dim_2C, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=dropout_p,
-                                    activation=True)
+            # Layer 2
+            self.encode_fc_2B = FCBlock(dim_1B*23, dim_2B, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=dropout_p,
+                                        activation=True)
+            self.encode_fc_2A = FCBlock(dim_1A*23, dim_2A, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=dropout_p,
+                                        activation=True)
+            self.encode_fc_2C = FCBlock(dim_1C, dim_2C, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=dropout_p,
+                                        activation=True)
 
-        # Layer 3
-        self.encode_fc_3B = FCBlock(dim_2B, latent_size, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=0,
-                                      activation=False, normalization=False)
-        self.encode_fc_3A = FCBlock(dim_2A, latent_size, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=0,
+            # Layer 3
+            self.encode_fc_3B = FCBlock(dim_2B, latent_size, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=0,
                                         activation=False, normalization=False)
-        self.encode_fc_3C = FCBlock(dim_2C, latent_size, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=0,
-                                        activation=False, normalization=False)   
+            self.encode_fc_3A = FCBlock(dim_2A, latent_size, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=0,
+                                            activation=False, normalization=False)
+            self.encode_fc_3C = FCBlock(dim_2C, latent_size, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=0,
+                                            activation=False, normalization=False)   
 
         if self.use_rep_trick:
             # Layer 4
@@ -721,14 +744,24 @@ class AESepAB(nn.Module):
         level_2_A = torch.cat(level_2_A_list, 1)
         level_2_C = self.encode_fc_1C(x[2])
 
-        level_3_B = self.encode_fc_2B(level_2_B)
-        level_3_A = self.encode_fc_2A(level_2_A)
-        level_3_C = self.encode_fc_2C(level_2_C)
-        
-        h_B = self.encode_fc_3B(level_3_B)
-        h_A = self.encode_fc_3A(level_3_A)
-        h_C = self.encode_fc_3C(level_3_C)
-        
+        if self.use_one_encoder:
+            level_3_B = self.encode_fc_2(level_2_B)
+            level_3_A = self.encode_fc_2(level_2_A)
+            level_3_C = self.encode_fc_2(level_2_C)
+
+            h_B = self.encode_fc_3(level_3_B)
+            h_A = self.encode_fc_3(level_3_A)
+            h_C = self.encode_fc_3(level_3_C)
+
+        else:
+            level_3_B = self.encode_fc_2B(level_2_B)
+            level_3_A = self.encode_fc_2A(level_2_A)
+            level_3_C = self.encode_fc_2C(level_2_C)
+            
+            h_B = self.encode_fc_3B(level_3_B)
+            h_A = self.encode_fc_3A(level_3_A)
+            h_C = self.encode_fc_3C(level_3_C)
+            
         if self.use_rep_trick:
             h_A_mean = self.encode_fc_A_mean(h_A)
             h_A_var = self.encode_fc_A_log_var(h_A)
@@ -740,8 +773,8 @@ class AESepAB(nn.Module):
             z_B = self.reparameterize(h_B_mean, h_B_var)
             z_C = self.reparameterize(h_C_mean, h_C_var)
             return z_A, z_B, z_C
-        else:
-            return h_A, h_B, h_C
+        
+        return h_A, h_B, h_C
     
     def reparameterize(self, mean, log_var):
         std = torch.exp(0.5 * log_var)

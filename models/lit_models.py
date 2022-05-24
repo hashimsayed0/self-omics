@@ -62,6 +62,7 @@ class AutoEncoder(pl.LightningModule):
         self.num_mask_B = num_mask_B
         self.masking_method = masking_method
         self.choose_masking_method_every_epoch = config['choose_masking_method_every_epoch']
+        self.use_one_encoder = config['use_one_encoder']
         self.use_one_decoder = config['use_one_decoder']
         self.concat_latent_for_decoder = config['concat_latent_for_decoder']
         self.recon_all_thrice = config['recon_all_thrice']
@@ -71,7 +72,7 @@ class AutoEncoder(pl.LightningModule):
             if self.split_A and self.split_B:
                 self.ae_dim_1B = 128
                 self.ae_dim_1A = 128
-                self.net = AESepAB((input_size_A, input_size_B, input_size_C), latent_size, self.use_one_decoder, self.concat_latent_for_decoder, self.recon_all_thrice, self.use_rep_trick, dropout_p=ae_drop_p, dim_1B=self.ae_dim_1B, dim_2B=ae_dim_2B, dim_1A=self.ae_dim_1A, dim_2A=ae_dim_2A, dim_1C=ae_dim_1C, dim_2C=ae_dim_2C)
+                self.net = AESepAB((input_size_A, input_size_B, input_size_C), latent_size, self.use_one_encoder, self.use_one_decoder, self.concat_latent_for_decoder, self.recon_all_thrice, self.use_rep_trick, dropout_p=ae_drop_p, dim_1B=self.ae_dim_1B, dim_2B=ae_dim_2B, dim_1A=self.ae_dim_1A, dim_2A=ae_dim_2A, dim_1C=ae_dim_1C, dim_2C=ae_dim_2C)
             elif self.split_A:
                 self.ae_dim_1A = 128
                 self.ae_dim_1B = 1024
@@ -202,6 +203,8 @@ class AutoEncoder(pl.LightningModule):
                                 help='weight of masked chromosomes prediction loss')
         parser.add_argument('--recon_all_thrice', default=False, type=lambda x: (str(x).lower() == 'true'),
                                 help='if True, modalities A, B and C will be reconstructed from latent representations of each A, B and C modalities')
+        parser.add_argument('--use_one_encoder', default=False, type=lambda x: (str(x).lower() == 'true'),
+                                help='if True, only one encoder is used to represent all modalities')
         parser.add_argument('--use_one_decoder', default=False, type=lambda x: (str(x).lower() == 'true'),
                                 help='if True, only one decoder is used to reconstruct all modalities')
         parser.add_argument('--concat_latent_for_decoder', default=False, type=lambda x: (str(x).lower() == 'true'),
