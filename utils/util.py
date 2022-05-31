@@ -21,14 +21,18 @@ def parse_arguments():
     parser.add_argument("--num_folds", type=int, default=5, 
                             help="number of folds for k-fold cross validation if one_fold is set to False")
     parser.add_argument("--class_0_weight", type=float, default=0.5, 
-                            help="weight of class 0 in the loss function")   
+                            help="weight of class 0 in the loss function")
+    parser.add_argument("--plot_confusion_matrix", default=False, type=lambda x: (str(x).lower() == 'true'),
+                            help="plot confusion matrix")
+    parser.add_argument("--prediction_data", type=str, default="test",
+                            help="data to predict on, options: test, train, val, all")
     
     # trainer related arguments
     parser.add_argument("--exp_name", type=str, default="test")
     parser.add_argument("--pretraining_patience", type=int, default=35)
     parser.add_argument("--downstream_patience", type=int, default=35)
     parser.add_argument("--pretraining_max_epochs", type=int, default=100)
-    parser.add_argument("--downstream_max_epochs", type=int, default=175)
+    parser.add_argument("--downstream_max_epochs", type=int, default=150)
     
     parser = ABCDataModule.add_data_module_args(parser)
     parser = AutoEncoder.add_model_specific_args(parser)
