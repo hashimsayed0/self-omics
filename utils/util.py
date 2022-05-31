@@ -78,7 +78,7 @@ def define_callbacks_loggers_pretraining(param, checkpoint_path, count):
                 callback_key = 'val_recon_all_loss'
     else:
         callback_key = 'val_recon_loss'
-    if param.cont_loss != 'none' or param.add_distance_loss:
+    if param.cont_align_loss_criterion != 'none' or param.cont_noise_loss_criterion != 'none' or param.add_distance_loss:
         callback_key = 'val_pretext_loss'
     
     param.max_epochs = param.pretraining_max_epochs
