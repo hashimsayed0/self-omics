@@ -531,7 +531,7 @@ class AutoEncoder(pl.LightningModule):
 
 
 class DownstreamModel(pl.LightningModule):
-    def __init__(self, ae_model_path, class_weights, checkpoint_path, num_classes, ae_net, latent_size, ds_lr, ds_weight_decay, ds_beta1, ds_drop_p, cl_loss, ds_lr_policy, ds_epoch_num_decay, ds_decay_step_size, max_epochs, **config):
+    def __init__(self, ae_model_path, class_weights, num_classes, ae_net, latent_size, ds_lr, ds_weight_decay, ds_beta1, ds_drop_p, cl_loss, ds_lr_policy, ds_epoch_num_decay, ds_decay_step_size, max_epochs, **config):
         super(DownstreamModel, self).__init__()
         self.input_size = latent_size
         self.ds_drop_p = ds_drop_p
@@ -554,7 +554,7 @@ class DownstreamModel(pl.LightningModule):
         self.ds_k_surv = config['ds_k_surv']
         self.ds_k_reg = config['ds_k_reg']
         self.ds_save_latent_testing = config['ds_save_latent_testing']
-        self.checkpoint_path = checkpoint_path
+        self.ds_save_latent_training = config['ds_save_latent_training']
         self.ds_mask_A = config['ds_mask_A']
         self.ds_mask_B = config['ds_mask_B']
         self.ds_masking_method = config['ds_masking_method']
@@ -616,6 +616,10 @@ class DownstreamModel(pl.LightningModule):
                                 help='whether to freeze the autoencoder for downstream model')
         parser.add_argument('--ds_save_latent_testing', default=False, type=lambda x: (str(x).lower() == 'true'),
                                 help='whether to save the latent representations of testing data')
+        parser.add_argument('--ds_save_latent_training', default=False, type=lambda x: (str(x).lower() == 'true'),
+                                help='whether to save the latent representations of training data')
+        parser.add_argument('--ds_save_latent_dataset', default=False, type=lambda x: (str(x).lower() == 'true'),
+                                help='whether to save the latent representations of the whole dataset')
         parser.add_argument('--ds_mask_A', default=False, type=lambda x: (str(x).lower() == 'true'),
                                 help='if True, data from A will be masked')
         parser.add_argument('--ds_mask_B', default=False, type=lambda x: (str(x).lower() == 'true'),
@@ -630,6 +634,9 @@ class DownstreamModel(pl.LightningModule):
                                 help='key for the callback to use for regression task')
         parser.add_argument('--ds_add_omics_identity', default=False, type=lambda x: (str(x).lower() == 'true'),
                                 help='add omics id to latent representations before using them for classification task')
+        parser.add_argument("--load_pretrained_ds", default=False, type=lambda x: (str(x).lower() == 'true'),
+                                help='load pretrained downstream model')
+        parser.add_argument("--pretrained_ds_path", type=str, default="")
         return parent_parser
 
     def train(self, mode=True):
@@ -856,6 +863,8 @@ class DownstreamModel(pl.LightningModule):
             self.log("{}_down_loss".format(self.mode), avg_loss)
 
     def training_epoch_end(self, outputs):
+        if self.ds_save_latent_training:
+            self.save_latent(outputs, 'train')
         return self.shared_epoch_end(outputs)
     
     def validation_step(self, batch, batch_idx):
@@ -879,12 +888,16 @@ class DownstreamModel(pl.LightningModule):
     def test_epoch_end(self, outputs):
         self.shared_epoch_end(outputs)
         if self.ds_save_latent_testing:
-            sample_ids_list = []
-            for x in outputs:
-                sample_ids_list.extend(x["sample_ids"])
-            h_concat = torch.cat([x["h"] for x in outputs]).cpu().numpy()
-            latent_space = pd.DataFrame(h_concat, index=sample_ids_list)
-            latent_space.to_csv(os.path.join(self.checkpoint_path, 'latent_space.tsv'), sep='\t')
+            self.save_latent(outputs, 'test')
+    
+    def save_latent(self, outputs, mode):
+        sample_ids_list = []
+        for x in outputs:
+            sample_ids_list.extend(x["sample_ids"])
+        h_concat = torch.cat([x["h"] for x in outputs]).cpu().numpy()
+        latent_space = pd.DataFrame(h_concat, index=sample_ids_list)
+        # latent_space.to_csv(os.path.join(self.checkpoint_path, 'latent_space.tsv'), sep='\t')
+        latent_space.to_csv('{}_latent_space.tsv'.format(mode), sep='\t')
     
     def predict_step(self, batch, batch_idx):
         return self.shared_step(batch)

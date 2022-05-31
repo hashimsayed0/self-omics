@@ -39,6 +39,7 @@ class ABCDataModule(LightningDataModule):
         else:
             self.ds_tasks = [self.ds_task]
         self.use_test_as_val_for_downstream = config['use_test_as_val_for_downstream']
+        self.prediction_data = config['prediction_data']
         self.mode = 'pretraining'
         # self.save_hyperparameters()
         self.load_data()
@@ -292,8 +293,18 @@ class ABCDataModule(LightningDataModule):
                     self.trainset = ABCDataset(self.A_df, self.B_df, self.C_df, self.train_index, self.split_A, self.split_B, self.ds_tasks, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor, self.values)
                     self.valset = ABCDataset(self.A_df, self.B_df, self.C_df, self.val_index, self.split_A, self.split_B, self.ds_tasks, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor, self.values)
             
-            if stage == "test" or stage is None or stage == "predict":
+            if stage == "test" or stage is None:
                 self.testset = ABCDataset(self.A_df, self.B_df, self.C_df, self.test_index, self.split_A, self.split_B, self.ds_tasks, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor, self.values)
+
+            if stage == "predict" or stage is None:
+                if self.prediction_data == 'train':
+                    self.predset = ABCDataset(self.A_df, self.B_df, self.C_df, self.train_index, self.split_A, self.split_B, self.ds_tasks, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor, self.values)
+                elif self.prediction_data == 'val':
+                    self.predset = ABCDataset(self.A_df, self.B_df, self.C_df, self.val_index, self.split_A, self.split_B, self.ds_tasks, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor, self.values)
+                elif self.prediction_data == 'test':
+                    self.predset = ABCDataset(self.A_df, self.B_df, self.C_df, self.test_index, self.split_A, self.split_B, self.ds_tasks, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor, self.values)
+                elif self.prediction_data == 'all':
+                    self.predset = ABCDataset(self.A_df, self.B_df, self.C_df, np.concatenate((self.train_index, self.val_index, self.test_index)), self.split_A, self.split_B, self.ds_tasks, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor, self.values)
 
     def train_dataloader(self):
         return DataLoader(self.trainset, batch_size=self.batch_size, num_workers=self.num_workers)
@@ -305,4 +316,4 @@ class ABCDataModule(LightningDataModule):
         return DataLoader(self.testset, batch_size=self.batch_size, num_workers=self.num_workers)
     
     def predict_dataloader(self):
-        return DataLoader(self.testset, batch_size=self.batch_size, num_workers=self.num_workers)
+        return DataLoader(self.predset, batch_size=self.batch_size, num_workers=self.num_workers)

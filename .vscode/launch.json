@@ -142,7 +142,7 @@
                 "--distance_loss_weight", "0.1",
                 // "--distance_loss_criterion", "bce",
 
-                "--use_one_encoder", "True",
+                // "--use_one_encoder", "True",
                 // "--use_one_decoder", "True",
                 "--recon_all_thrice", "True",
                 // "--concat_latent_for_decoder", "True",
@@ -281,6 +281,83 @@
                 // "--max_epochs", "1",
                 // "--load_pretrained_ae", "True",
                 // "--pretrained_ae_path", "./checkpoints/test/fold-0/pretraining/version_58/epoch=19-step=239.ckpt"
+            ]
+        },
+        {
+            "name": "test",
+            "type": "python",
+            "request": "launch",
+            "program": "./test.py",
+            "console": "integratedTerminal",
+            "args": [
+                // "--ds_save_latent_training", "True",
+                // "--ds_save_latent_testing", "True",
+                "--ds_save_latent_dataset", "True",
+                "--prediction_data", "all",
+                "--load_pretrained_ae", "True",
+                "--pretrained_ae_path", "/l/users/sayed.hashim/files/Research/Methods/contrastive-tcga/sweep/contrastive-omics/checkpoints/recon_all_one_enc_dec/fold-0/pretraining/version_3/epoch=30-step=433.ckpt",
+                // "--load_pretrained_ds", "True",
+                // "--pretrained_ds_path", "checkpoints/test/fold-0/downstream/version_16/epoch=0-step=13.ckpt",
+                
+                "--use_sample_list", "True",
+                "--gpus", "-1",
+                "--split_B", "True",
+                "--split_A", "True",
+                "--num_workers", "4",
+                "--exp_name", "test",
+                "--data_dir", "./data/ABC_inter/Normalized",
+                "--cl_loss", "bce",
+                "--latent_size", "512",
+                "--batch_size", "512",
+                "--ae_optimizer", "adam",
+                "--ae_use_lrscheduler", "False",
+
+                "--mask_A", "True",
+                "--num_mask_A", "19",
+                // "--mask_B", "True",
+                // "--num_mask_B", "19",
+                "--masking_method", "gaussian_noise",
+                "--change_ch_to_mask_every_epoch", "True",
+                // "--choose_masking_method_every_epoch", "True",
+                // "--predict_masked_chromosomes", "True",
+                // "--masked_chr_prediction_weight", "1.0",
+                
+                "--ae_net", "ae",
+                "--pretraining_patience", "35",
+                "--downstream_patience", "35",
+                "--pretraining_max_epochs", "100",
+                "--downstream_max_epochs", "150",
+                "--ae_lr", "0.001",
+                
+                "--ds_latent_agg_method", "sum",
+                // "--ds_mask_B", "True",
+                // "--ds_masking_method", "zero",
+                // "--augment_B", "True",
+
+                "--ae_drop_p", "0.0",
+                "--ds_drop_p", "0.0",
+
+                "--cont_loss", "patient",
+                "--cont_loss_criterion", "barlowtwins",
+                // "--cont_loss_similarity", "cosine",
+                // "--cont_loss_normalize", "True",
+                "--cont_loss_temp", "0.1",
+                "--cont_loss_weight", "1.0",
+
+                "--add_distance_loss_to_latent", "True",
+                // "--add_distance_loss_to_proj", "True",
+                "--distance_loss_weight", "0.1",
+
+                // "--use_one_encoder", "True",
+                // "--use_one_decoder", "True",
+                "--recon_all_thrice", "True",
+                // "--concat_latent_for_decoder", "True",
+                
+                "--ds_task", "class",
+                // "--ds_k_reg", "0.001",
+                // "--ds_class_callback_key", "f1",
+               
+                "--use_test_as_val_for_downstream", "True",
             ]
         }
     ]
