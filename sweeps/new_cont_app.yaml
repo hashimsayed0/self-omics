@@ -1,12 +1,12 @@
-method: bayes
+method: grid
 metric:
   goal: maximize
   name: test_accuracy
-name: new_cont_app
+name: double_cont_masked_tune
 parameters:
   add_distance_loss_to_latent:
     values:
-      # - "False"
+      - "False"
       - "True"
   # add_distance_loss_to_proj:
   #   values:
@@ -52,7 +52,7 @@ parameters:
   #     - "True"
   cont_align_loss_criterion:
     values:
-      - barlowtwins
+      # - barlowtwins
       - clip
   cont_noise_loss_criterion:
     values:
@@ -65,16 +65,16 @@ parameters:
     values:
       # - "0.1"
       - "0.5"
-      - "1.0"
+      # - "1.0"
   cont_align_loss_weight:
     values:
       - "0.5"
-      - "1.0"
+      # - "1.0"
   cont_align_loss_latent:
     values:
-      - "unmasked"
+      # - "unmasked"
       - "masked"
-      - "mean"
+      # - "mean"
   # cont_loss_lambda:
   #   values:
   #     - "0.01"
@@ -112,7 +112,7 @@ parameters:
       - class
   exp_name:
     values:
-      - new_cont_app
+      - double_cont_masked_tune
   fold_idx:
     values:
       - "0"
@@ -133,25 +133,27 @@ parameters:
     values:
       - gaussian_noise
       - zero
-      - swap_noise
+      # - swap_noise
   num_mask_A:
     values:
       # - "18"
       - "19"
       # - "20"
       # - "21"
-  # mask_B:
-  #   values:
-  #     - "True"
-  # num_mask_B:
-  #   values:
-  #     - "16" 
-  # mask_C:
-  #   values:
-  #     - "True"
-  # ratio_mask_C:
-  #   values:
-  #     - "0.7"
+  mask_B:
+    values:
+      - "True"
+      - "False"
+  num_mask_B:
+    values:
+      - "19" 
+  mask_C:
+    values:
+      - "True"
+      - "False"
+  ratio_mask_C:
+    values:
+      - "0.75"
   num_workers:
     value: "4"
   # pretraining_max_epochs:
