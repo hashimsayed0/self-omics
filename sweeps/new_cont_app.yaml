@@ -2,11 +2,11 @@ method: grid
 metric:
   goal: maximize
   name: test_accuracy
-name: double_cont_masked_tune
+name: new_cont_k_fold
 parameters:
   add_distance_loss_to_latent:
     values:
-      - "False"
+      # - "False"
       - "True"
   # add_distance_loss_to_proj:
   #   values:
@@ -42,7 +42,7 @@ parameters:
       # - "False"
   choose_masking_method_every_epoch:
     values:
-      - "True"
+      # - "True"
       - "False"
   cl_loss:
     values:
@@ -56,7 +56,7 @@ parameters:
       - clip
   cont_noise_loss_criterion:
     values:
-      - barlowtwins
+      # - barlowtwins
       - clip
   cont_loss_temp:
     values:
@@ -112,14 +112,14 @@ parameters:
       - class
   exp_name:
     values:
-      - double_cont_masked_tune
+      - new_cont_k_fold
   fold_idx:
     values:
       - "0"
-      # - "1"
-      # - "2"
-      # - "3"
-      # - "4"
+      - "1"
+      - "2"
+      - "3"
+      - "4"
   gpus:
     values:
       - "-1"
@@ -131,7 +131,7 @@ parameters:
       - "True"
   masking_method:
     values:
-      - gaussian_noise
+      # - gaussian_noise
       - zero
       # - swap_noise
   num_mask_A:
@@ -142,14 +142,14 @@ parameters:
       # - "21"
   mask_B:
     values:
-      - "True"
+      # - "True"
       - "False"
   num_mask_B:
     values:
       - "19" 
   mask_C:
     values:
-      - "True"
+      # - "True"
       - "False"
   ratio_mask_C:
     values:
@@ -165,12 +165,12 @@ parameters:
   #     - "200"
   recon_all_thrice:
     value: "True"
-  # seed:
-  #   values:
-  #     - "14"
-  #     - "7"
-  #     - "6"
-  #     - "10"
+  seed:
+    values:
+      - "42"
+      - "14"
+      - "7"
+      # - "10"
   split_A:
     value: "True"
   split_B:
