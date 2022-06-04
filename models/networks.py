@@ -776,6 +776,57 @@ class AESepAB(nn.Module):
         
         return h_A, h_B, h_C
     
+    def encode_A(self, x):
+        level_2_A_list = []
+        for i in range(0, 23):
+            level_2_A_list.append(self.encode_fc_1A_list[i](x[i]))
+        level_2_A = torch.cat(level_2_A_list, 1)
+        if self.use_one_encoder:
+            level_3_A = self.encode_fc_2(level_2_A)
+            h_A = self.encode_fc_3(level_3_A)
+        else:
+            level_3_A = self.encode_fc_2A(level_2_A)
+            h_A = self.encode_fc_3A(level_3_A)
+        if self.use_rep_trick:
+            h_A_mean = self.encode_fc_A_mean(h_A)
+            h_A_var = self.encode_fc_A_log_var(h_A)
+            z_A = self.reparameterize(h_A_mean, h_A_var)
+            return z_A
+        return h_A
+    
+    def encode_B(self, x):
+        level_2_B_list = []
+        for i in range(0, 23):
+            level_2_B_list.append(self.encode_fc_1B_list[i](x[i]))
+        level_2_B = torch.cat(level_2_B_list, 1)
+        if self.use_one_encoder:
+            level_3_B = self.encode_fc_2(level_2_B)
+            h_B = self.encode_fc_3(level_3_B)
+        else:
+            level_3_B = self.encode_fc_2B(level_2_B)
+            h_B = self.encode_fc_3B(level_3_B)
+        if self.use_rep_trick:
+            h_B_mean = self.encode_fc_B_mean(h_B)
+            h_B_var = self.encode_fc_B_log_var(h_B)
+            z_B = self.reparameterize(h_B_mean, h_B_var)
+            return z_B
+        return h_B
+    
+    def encode_C(self, x):
+        level_2_C = self.encode_fc_1C(x)
+        if self.use_one_encoder:
+            level_3_C = self.encode_fc_2(level_2_C)
+            h_C = self.encode_fc_3(level_3_C)
+        else:
+            level_3_C = self.encode_fc_2C(level_2_C)
+            h_C = self.encode_fc_3C(level_3_C)
+        if self.use_rep_trick:
+            h_C_mean = self.encode_fc_C_mean(h_C)
+            h_C_var = self.encode_fc_C_log_var(h_C)
+            z_C = self.reparameterize(h_C_mean, h_C_var)
+            return z_C
+        return h_C
+    
     def reparameterize(self, mean, log_var):
         std = torch.exp(0.5 * log_var)
         eps = torch.randn_like(std)
@@ -880,6 +931,116 @@ class AESepAB(nn.Module):
                     recon_A_list.append(self.decode_fc_1A_list[i](level_2_A.narrow(1, i * self.dim_1A, self.dim_1A)))
                 recon_C = self.decode_fc_1C(level_2_C)
 
+        return [recon_A_list, recon_B_list, recon_C]
+
+    def decode_h_A(self, h):
+        if self.use_one_decoder:
+            level_3_A = self.decode_fc_3(h)
+            level_2_A = self.decode_fc_2(level_3_A)
+
+            if self.recon_all_thrice:
+                recon_B_list = []
+                for i in range(0, 23):
+                    recon_B_list.append(self.decode_fc_1B_list[i](level_2_A))
+                recon_A_list = []
+                for i in range(0, 23):
+                    recon_A_list.append(self.decode_fc_1A_list[i](level_2_A))
+                recon_C = self.decode_fc_1C(level_2_A)
+            else:
+                recon_A_list = []
+                for i in range(0, 23):
+                    recon_A_list.append(self.decode_fc_1A_list[i](level_2_A))
+                return (recon_A_list, None, None)
+                
+        else:
+            level_3_A = self.decode_fc_3A(h)
+            level_2_A = self.decode_fc_2A(level_3_A)
+
+            if self.recon_all_thrice:
+                recon_B_list = []
+                for i in range(0, 23):
+                    recon_B_list.append(self.decode_from_A_fc_1B_list[i](level_2_A.narrow(1, i * self.dim_1B, self.dim_1B)))
+                recon_A_list = []
+                for i in range(0, 23):
+                    recon_A_list.append(self.decode_from_A_fc_1A_list[i](level_2_A.narrow(1, i * self.dim_1A, self.dim_1A)))
+                recon_C = self.decode_from_A_fc_1C(level_2_A)
+            else:
+                recon_A_list = []
+                for i in range(0, 23):
+                    recon_A_list.append(self.decode_fc_1A_list[i](level_2_A.narrow(1, i * self.dim_1A, self.dim_1A)))
+
+        return [recon_A_list, recon_B_list, recon_C]
+    
+    def decode_h_B(self, h):
+        if self.use_one_decoder:
+            level_3_B = self.decode_fc_3(h)
+            level_2_B = self.decode_fc_2(level_3_B)
+
+            if self.recon_all_thrice:
+                recon_B_list = []
+                for i in range(0, 23):
+                    recon_B_list.append(self.decode_fc_1B_list[i](level_2_B))
+                recon_A_list = []
+                for i in range(0, 23):
+                    recon_A_list.append(self.decode_fc_1A_list[i](level_2_B))
+                recon_C = self.decode_fc_1C(level_2_B)
+            else:
+                recon_B_list = []
+                for i in range(0, 23):
+                    recon_B_list.append(self.decode_fc_1B_list[i](level_2_B))
+                return (None, recon_B_list, None)
+                
+        else:
+            level_3_B = self.decode_fc_3B(h)
+            level_2_B = self.decode_fc_2B(level_3_B)
+
+            if self.recon_all_thrice:
+                recon_B_list = []
+                for i in range(0, 23):
+                    recon_B_list.append(self.decode_from_B_fc_1B_list[i](level_2_B.narrow(1, i * self.dim_1B, self.dim_1B)))
+                recon_A_list = []
+                for i in range(0, 23):
+                    recon_A_list.append(self.decode_from_B_fc_1A_list[i](level_2_B.narrow(1, i * self.dim_1A, self.dim_1A)))
+                recon_C = self.decode_from_B_fc_1C(level_2_B)
+            else:
+                recon_B_list = []
+                for i in range(0, 23):
+                    recon_B_list.append(self.decode_from_B_fc_1B_list[i](level_2_B.narrow(1, i * self.dim_1B, self.dim_1B)))
+                
+        return [recon_A_list, recon_B_list, recon_C]
+    
+    def decode_h_C(self, h):
+        if self.use_one_decoder:
+            level_3_C = self.decode_fc_3(h)
+            level_2_C = self.decode_fc_2(level_3_C)
+
+            if self.recon_all_thrice:
+                recon_B_list = []
+                for i in range(0, 23):
+                    recon_B_list.append(self.decode_fc_1B_list[i](level_2_C))
+                recon_A_list = []
+                for i in range(0, 23):
+                    recon_A_list.append(self.decode_fc_1A_list[i](level_2_C))
+                recon_C = self.decode_fc_1C(level_2_C)
+            else:
+                recon_C = self.decode_fc_1C(level_2_C)
+                return (None, None, recon_C)
+                
+        else:
+            level_3_C = self.decode_fc_3C(h)
+            level_2_C = self.decode_fc_2C(level_3_C)
+
+            if self.recon_all_thrice:
+                recon_B_list = []
+                for i in range(0, 23):
+                    recon_B_list.append(self.decode_from_C_fc_1B_list[i](level_2_C.narrow(1, i * self.dim_1B, self.dim_1B)))
+                recon_A_list = []
+                for i in range(0, 23):
+                    recon_A_list.append(self.decode_from_C_fc_1A_list[i](level_2_C.narrow(1, i * self.dim_1A, self.dim_1A)))
+                recon_C = self.decode_from_C_fc_1C(level_2_C)
+            else:
+                recon_C = self.decode_from_C_fc_1C(level_2_C)
+                
         return [recon_A_list, recon_B_list, recon_C]
 
     def forward(self, x):

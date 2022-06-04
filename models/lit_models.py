@@ -48,6 +48,8 @@ class AutoEncoder(pl.LightningModule):
         self.add_distance_loss_to_latent = config['add_distance_loss_to_latent']
         self.add_distance_loss_to_proj = config['add_distance_loss_to_proj']
         self.distance_loss_weight = config['distance_loss_weight']
+        self.add_consistency_loss = config['add_consistency_loss']
+        self.consistency_loss_weight = config['consistency_loss_weight']
         self.ae_optimizer = ae_optimizer
         self.ae_use_lrscheduler = ae_use_lrscheduler
         self.cont_align_loss_criterion = cont_align_loss_criterion
@@ -132,6 +134,9 @@ class AutoEncoder(pl.LightningModule):
             elif self.distance_loss_criterion == 'bce':
                 self.dist_loss = nn.BCELoss()
         
+        if self.add_consistency_loss:
+            self.cons_loss = nn.MSELoss()
+        
         if self.mask_B:
             self.mask_B_ids = np.random.randint(0, len(self.input_size_B), size=self.num_mask_B)
         if self.mask_A:
@@ -186,6 +191,8 @@ class AutoEncoder(pl.LightningModule):
         parser.add_argument("--add_distance_loss_to_proj", default=False, type=lambda x: (str(x).lower() == 'true'), help="works only when a constrastive loss is used")
         parser.add_argument("--distance_loss_weight", type=float, default=0.5)
         parser.add_argument("--distance_loss_criterion", type=str, default="mse", help="distance loss to use, options: mse, bce, l1")
+        parser.add_argument("--add_consistency_loss", default=False, type=lambda x: (str(x).lower() == 'true'), help="add consistency loss")
+        parser.add_argument("--consistency_loss_weight", type=float, default=10.0)
         parser.add_argument("--ae_optimizer", type=str, default="adam", help="optimizer to use, options: adam, lars")
         parser.add_argument("--ae_use_lrscheduler", default=False, type=lambda x: (str(x).lower() == 'true'))
         parser.add_argument("--ae_beta1", type=float, default=0.5)
@@ -526,6 +533,24 @@ class AutoEncoder(pl.LightningModule):
         dist_loss = self.dist_loss(h_A, h_B) + self.dist_loss(h_B, h_C) + self.dist_loss(h_C, h_A)
         return logs, dist_loss
     
+    def cons_step(self, h):
+        logs = {}
+        h_A, h_B, h_C = h
+        cons_loss = 0
+        h_A_recon_using_dec_B = self.net.encode_B(self.net.decode_h_B(h_A)[1])
+        h_B_recon_using_dec_A = self.net.encode_A(self.net.decode_h_A(h_B)[0])
+        h_C_recon_using_dec_A = self.net.encode_A(self.net.decode_h_A(h_C)[0])
+        h_A_recon_using_dec_C = self.net.encode_C(self.net.decode_h_C(h_A)[2])
+        h_B_recon_using_dec_C = self.net.encode_C(self.net.decode_h_C(h_B)[2])
+        h_C_recon_using_dec_B = self.net.encode_B(self.net.decode_h_B(h_C)[1])
+        cons_loss += self.cons_loss(h_A_recon_using_dec_B, h_B)
+        cons_loss += self.cons_loss(h_B_recon_using_dec_A, h_A)
+        cons_loss += self.cons_loss(h_C_recon_using_dec_A, h_A)
+        cons_loss += self.cons_loss(h_A_recon_using_dec_C, h_C)
+        cons_loss += self.cons_loss(h_B_recon_using_dec_C, h_C)
+        cons_loss += self.cons_loss(h_C_recon_using_dec_B, h_B)
+        return logs, cons_loss
+    
     def training_step(self, batch, batch_idx):
         if self.ae_net == 'ae':
             logs, h, pretext_loss = self.ae_step(batch) 
@@ -537,6 +562,10 @@ class AutoEncoder(pl.LightningModule):
             logs, dist_loss = self.dist_step(h)
             pretext_loss += dist_loss * self.distance_loss_weight
             self.log('{}_dist_loss_btw_latent'.format(self.mode), dist_loss, on_step=False, on_epoch=True)
+        if self.add_consistency_loss:
+            logs, cons_loss = self.cons_step(h)
+            pretext_loss += cons_loss * self.consistency_loss_weight
+            self.log('{}_cons_loss'.format(self.mode), cons_loss, on_step=False, on_epoch=True)
         if self.cont_align_loss_criterion != "none":
             if self.cont_align_loss_criterion in ['barlowtwins', 'clip'] or h[0].shape[0] == self.batch_size:
                 self.cont_pair = 'align'
@@ -569,6 +598,10 @@ class AutoEncoder(pl.LightningModule):
             _, dist_loss = self.dist_step(h)
             pretext_loss += dist_loss * self.distance_loss_weight
             logs['{}_dist_loss'.format(self.mode)] = dist_loss
+        if self.add_consistency_loss:
+            _, cons_loss = self.cons_step(h)
+            pretext_loss += cons_loss * self.consistency_loss_weight
+            logs['{}_cons_loss'.format(self.mode)] = cons_loss
         if self.cont_align_loss_criterion != "none":
             cont_logs = {}
             if self.cont_align_loss_criterion in ['barlowtwins', 'clip'] or h[0].shape[0] == self.batch_size:

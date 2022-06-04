@@ -146,6 +146,9 @@
                 "--distance_loss_weight", "0.1",
                 // "--distance_loss_criterion", "bce",
 
+                "--add_consistency_loss", "True",
+                "--consistency_loss_weight", "10.0",
+
                 // "--use_one_encoder", "True",
                 // "--use_one_decoder", "True",
                 "--recon_all_thrice", "True",
