@@ -39,6 +39,7 @@ classifier_trainer.fit(classifier, abc_dm)
 # classifier_trainer.test(datamodule=abc_dm, ckpt_path='best')
 
 abc_dm.mode = 'downstream'
+abc_dm.setup('fit')
 ds_model_path = model_checkpoint.best_model_path
 early_stopping, model_checkpoint, csv_logger = util.define_callbacks_loggers_comics(param, checkpoint_path, fold)
 config['ds_model_path'] = ds_model_path

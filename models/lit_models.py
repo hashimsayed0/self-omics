@@ -634,10 +634,7 @@ class AutoEncoder(pl.LightningModule):
 
 class DownstreamModel(pl.LightningModule):
     def __init__(self, **config):
-        if 'ds_model_path' in config:
-            super(DownstreamModel, self).__init__(**config)
-        else:
-            super(DownstreamModel, self).__init__()
+        super(DownstreamModel, self).__init__()
         self.ae_model_path = config['ae_model_path']
         self.ds_input_size = config['latent_size']
         self.ds_drop_p = config['ds_drop_p']
@@ -939,8 +936,8 @@ class DownstreamModel(pl.LightningModule):
         return self.shared_step(batch)
     
     def shared_epoch_end(self, outputs):
-    #     if 'class' in self.ds_tasks:
-        if 'class_loss' in outputs[0]:
+        if 'class' in self.ds_tasks:
+        # if 'class_loss' in outputs[0]:
             class_loss = torch.stack([x["class_loss"] for x in outputs]).mean()
             self.log("{}_class_loss".format(self.mode), class_loss)
             accuracy, precision, recall, f1, auc = self.compute_class_metrics(outputs)
@@ -1076,10 +1073,11 @@ class DownstreamModel(pl.LightningModule):
         return time_points
     
 
-class ComicsModel(DownstreamModel, AutoEncoder):
+class ComicsModel(pl.LightningModule):
     def __init__(self, **config):
-        super(ComicsModel, self).__init__(**config)
-        AutoEncoder.__init__(self, **config)
+        super(ComicsModel, self).__init__()
+        # super(ComicsModel, self).__init__(**config)
+        # AutoEncoder.__init__(self, **config)
         # self.ae_model_path = config['ae_model_path']
         # self.ds_model_path = config['ds_model_path']
         # self.input_size_A = config['input_size_A']
@@ -1267,18 +1265,21 @@ class ComicsModel(DownstreamModel, AutoEncoder):
         #     self.reg_net = self.ds_model.reg_net
         #     self.reg_loss = nn.MSELoss()
 
-        self.ae_model_path = config['ae_model_path']
+        # self.ae_model_path = config['ae_model_path']
         self.ds_model_path = config['ds_model_path']
-        self.ae_model = AutoEncoder.load_from_checkpoint(self.ae_model_path)
-        self.ae_model.unfreeze()
-        self.ae = self.ae_model.ae
+        # self.ae_model = AutoEncoder.load_from_checkpoint(self.ae_model_path)
+        # self.ae_model.unfreeze()
+        # self.ae = self.ae_model.ae
         self.ds = DownstreamModel.load_from_checkpoint(self.ds_model_path)
-        if 'class' in self.ds_tasks:
-            self.class_net = self.ds.class_net
-        if 'surv' in self.ds_tasks:
-            self.surv_net = self.ds.surv_net
-        if 'reg' in self.ds_tasks:
-            self.reg_net = self.ds.reg_net
+        self.ae_model = self.ds.ae_model
+        self.ae_model.unfreeze()
+        # self.ae = self.ae_model.ae
+        # if 'class' in self.ds.ds_tasks:
+        #     self.class_net = self.ds.class_net
+        # if 'surv' in self.ds.ds_tasks:
+        #     self.surv_net = self.ds.surv_net
+        # if 'reg' in self.ds.ds_tasks:
+        #     self.reg_net = self.ds.reg_net
         self.cs_pretext_weight = config['cs_pretext_weight']
         self.save_hyperparameters()
 
@@ -1311,19 +1312,19 @@ class ComicsModel(DownstreamModel, AutoEncoder):
         #                                                     T_max=500,
         #                                                     eta_min=self.hparams.ae_lr/50))
         # optimizers.append(optim.Adam(self.ds.parameters(), lr=self.ds_lr, weight_decay=self.ds_weight_decay, betas=(self.ds_beta1, 0.999)))
-        optimizers.append(optim.Adam(list(self.ds.parameters()) + list(self.ae_model.parameters()), lr=self.ds_lr, weight_decay=self.ds_weight_decay, betas=(self.ds_beta1, 0.999)))
-        if self.ds_lr_policy == 'linear':
+        optimizers.append(optim.Adam(list(self.ds.parameters()) + list(self.ae_model.parameters()), lr=self.ds.ds_lr, weight_decay=self.ds.ds_weight_decay, betas=(self.ds.ds_beta1, 0.999)))
+        if self.ds.ds_lr_policy == 'linear':
             def lambda_rule(epoch):
-                lr_lambda = 1.0 - max(0, epoch - self.ds_max_epochs + self.ds_epoch_num_decay) / float(self.ds_epoch_num_decay + 1)
+                lr_lambda = 1.0 - max(0, epoch - self.ds.ds_max_epochs + self.ds.ds_epoch_num_decay) / float(self.ds.ds_epoch_num_decay + 1)
                 return lr_lambda
             # lr_scheduler is imported from torch.optim
             schedulers.append(lr_scheduler.LambdaLR(optimizers[-1], lr_lambda=lambda_rule))
-        elif self.ds_lr_policy == 'step':
-            schedulers.append(lr_scheduler.StepLR(optimizers[-1], step_size=self.ds_decay_step_size, gamma=0.1))
-        elif self.ds_lr_policy == 'plateau':
+        elif self.ds.ds_lr_policy == 'step':
+            schedulers.append(lr_scheduler.StepLR(optimizers[-1], step_size=self.ds.ds_decay_step_size, gamma=0.1))
+        elif self.ds.ds_lr_policy == 'plateau':
             schedulers.append(lr_scheduler.ReduceLROnPlateau(optimizers[-1], mode='min', factor=0.2, threshold=0.01, patience=5))
-        elif self.ds_lr_policy == 'cosine':
-            schedulers.append(lr_scheduler.CosineAnnealingLR(optimizers[-1], T_max=self.ds_max_epochs, eta_min=0))
+        elif self.ds.ds_lr_policy == 'cosine':
+            schedulers.append(lr_scheduler.CosineAnnealingLR(optimizers[-1], T_max=self.ds.ds_max_epochs, eta_min=0))
         return optimizers, schedulers
 
     def training_step(self, batch, batch_idx):
@@ -1347,6 +1348,10 @@ class ComicsModel(DownstreamModel, AutoEncoder):
         self.log('train_comics_loss', total_loss, on_step=False, on_epoch=True)
         return {'loss': total_loss, **ds_dict}
     
+    def training_epoch_end(self, outputs):
+        self.mode = 'train'
+        self.ds.training_epoch_end(outputs)
+    
     def validation_step(self, batch, batch_idx):
         self.mode = "val"
         ae_dict = self.ae_model.validation_step(batch, batch_idx)
@@ -1354,29 +1359,40 @@ class ComicsModel(DownstreamModel, AutoEncoder):
         pretext_loss = ae_dict['{}_pretext_loss'.format(self.mode)]
         # self.log('val_pretext_loss', pretext_loss, on_step=False, on_epoch=True)
         down_loss = 0
-        if 'class' in self.ds_tasks:
+        if 'class' in self.ds.ds_tasks:
             down_loss += ds_dict['class_loss']
-        if 'surv' in self.ds_tasks:
+        if 'surv' in self.ds.ds_tasks:
             down_loss += ds_dict['surv_loss']
-        if 'reg' in self.ds_tasks:
+        if 'reg' in self.ds.ds_tasks:
             down_loss += ds_dict['reg_loss']
         # self.log('val_class_loss', down_loss, on_step=False, on_epoch=True)
         total_loss = self.cs_pretext_weight * pretext_loss + down_loss
         self.log('{}_comics_loss'.format(self.mode), total_loss, on_step=False, on_epoch=True)
-        return {'{}_comics_loss'.format(self.mode): total_loss, **ds_dict, **ae_dict}
+        return {'ds_dict': ds_dict, 'ae_dict': ae_dict}
 
+    def validation_epoch_end(self, outputs):
+        self.mode = 'val'
+        ae_outputs = [output['ae_dict'] for output in outputs]
+        ds_outputs = [output['ds_dict'] for output in outputs]
+        accuracy, _, _, _, _ = self.ds.compute_class_metrics(ds_outputs)
+        self.log("val_accuracy", accuracy)
+        self.ae_model.validation_epoch_end(ae_outputs)
+        self.ds.validation_epoch_end(ds_outputs)
     
     def test_step(self, batch, batch_idx):
         self.mode = "test"
         ae_dict = self.ae_model.validation_step(batch, batch_idx)
         ds_dict = self.ds.test_step(batch, batch_idx)
         total_loss = self.cs_pretext_weight * ae_dict['val_pretext_loss']
-        if 'class' in self.ds_tasks:
+        if 'class' in self.ds.ds_tasks:
             total_loss += ds_dict['class_loss']
-        if 'surv' in self.ds_tasks:
+        if 'surv' in self.ds.ds_tasks:
             total_loss += ds_dict['surv_loss']
-        if 'reg' in self.ds_tasks:
+        if 'reg' in self.ds.ds_tasks:
             total_loss += ds_dict['reg_loss']
         self.log('{}_comics_loss'.format(self.mode), total_loss, on_step=False, on_epoch=True)
-        return {'{}_comics_loss'.format(self.mode): total_loss, **ds_dict, **ae_dict}
+        return {**ds_dict}
 
+    def test_epoch_end(self, outputs):
+        self.mode = 'test'
+        self.ds.test_epoch_end(outputs)
