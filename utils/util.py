@@ -2,7 +2,7 @@ import argparse
 from pytorch_lightning import Trainer, seed_everything
 import torch
 import numpy as np
-from models.lit_models import AutoEncoder, DownstreamModel
+from models.lit_models import AutoEncoder, DownstreamModel, ComicsModel
 import pytorch_lightning.loggers as pl_loggers
 from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
 import os
@@ -31,12 +31,15 @@ def parse_arguments():
     parser.add_argument("--exp_name", type=str, default="test")
     parser.add_argument("--pretraining_patience", type=int, default=35)
     parser.add_argument("--downstream_patience", type=int, default=35)
-    parser.add_argument("--pretraining_max_epochs", type=int, default=100)
-    parser.add_argument("--downstream_max_epochs", type=int, default=150)
+    parser.add_argument("--comics_patience", type=int, default=50)
+    parser.add_argument("--pretraining_max_epochs", type=int, default=50)
+    parser.add_argument("--downstream_max_epochs", type=int, default=50)
+    parser.add_argument("--comics_max_epochs", type=int, default=100)
     
     parser = ABCDataModule.add_data_module_args(parser)
     parser = AutoEncoder.add_model_specific_args(parser)
     parser = DownstreamModel.add_model_specific_args(parser)
+    parser = ComicsModel.add_model_specific_args(parser)
 
     # add all the available trainer options to argparse
     # ie: now --gpus --num_nodes ... --fast_dev_run all work in the cli
@@ -108,3 +111,18 @@ def define_callbacks_loggers_downstream(param, checkpoint_path, count):
     # return early_stopping, model_checkpoint, wandb_logger, csv_logger
     return early_stopping, model_checkpoint, csv_logger
 
+def define_callbacks_loggers_comics(param, checkpoint_path, count):
+    early_stopping_key = 'val_comics_loss'
+    if param.ds_task == 'class':
+        callback_key = 'val_{}'.format(param.ds_class_callback_key)
+    elif param.ds_task == 'surv':
+        callback_key = 'val_{}'.format(param.ds_surv_callback_key)
+    elif param.ds_task == 'reg':
+        callback_key = 'val_{}'.format(param.ds_reg_callback_key)
+    elif param.ds_task == 'multi':
+        callback_key = 'val_down_loss'
+    param.max_epochs = param.comics_max_epochs
+    csv_logger = pl_loggers.CSVLogger(checkpoint_path, name='comics')
+    early_stopping = EarlyStopping(early_stopping_key, patience=param.comics_patience)
+    model_checkpoint = ModelCheckpoint(csv_logger.log_dir, monitor=callback_key, mode='max', save_top_k=1)
+    return early_stopping, model_checkpoint, csv_logger

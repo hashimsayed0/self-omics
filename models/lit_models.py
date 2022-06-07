@@ -1,6 +1,8 @@
 from email.policy import default
 from pickletools import optimize
 from random import sample
+from sched import scheduler
+from turtle import forward
 from pl_bolts import optimizers
 import pytorch_lightning as pl
 import torch
@@ -79,20 +81,20 @@ class AutoEncoder(pl.LightningModule):
             if self.split_A and self.split_B:
                 self.ae_dim_1B = 128
                 self.ae_dim_1A = 128
-                self.net = AESepAB((input_size_A, input_size_B, input_size_C), latent_size, self.use_one_encoder, self.use_one_decoder, self.concat_latent_for_decoder, self.recon_all_thrice, self.use_rep_trick, dropout_p=ae_drop_p, dim_1B=self.ae_dim_1B, dim_2B=ae_dim_2B, dim_1A=self.ae_dim_1A, dim_2A=ae_dim_2A, dim_1C=ae_dim_1C, dim_2C=ae_dim_2C)
+                self.ae = AESepAB((input_size_A, input_size_B, input_size_C), latent_size, self.use_one_encoder, self.use_one_decoder, self.concat_latent_for_decoder, self.recon_all_thrice, self.use_rep_trick, dropout_p=ae_drop_p, dim_1B=self.ae_dim_1B, dim_2B=ae_dim_2B, dim_1A=self.ae_dim_1A, dim_2A=ae_dim_2A, dim_1C=ae_dim_1C, dim_2C=ae_dim_2C)
             elif self.split_A:
                 self.ae_dim_1A = 128
                 self.ae_dim_1B = 1024
-                self.net = AESepA((input_size_A, input_size_B, input_size_C), latent_size, self.use_one_decoder, self.concat_latent_for_decoder, self.recon_all_thrice, dropout_p=ae_drop_p, dim_1B=self.ae_dim_1B, dim_2B=ae_dim_2B, dim_1A=self.ae_dim_1A, dim_2A=ae_dim_2A, dim_1C=ae_dim_1C, dim_2C=ae_dim_2C)
+                self.ae = AESepA((input_size_A, input_size_B, input_size_C), latent_size, self.use_one_decoder, self.concat_latent_for_decoder, self.recon_all_thrice, dropout_p=ae_drop_p, dim_1B=self.ae_dim_1B, dim_2B=ae_dim_2B, dim_1A=self.ae_dim_1A, dim_2A=ae_dim_2A, dim_1C=ae_dim_1C, dim_2C=ae_dim_2C)
             elif self.split_B:
                 self.ae_dim_1B = 128
                 self.ae_dim_1A = 1024
-                self.net = AESepB((input_size_A, input_size_B, input_size_C), latent_size, dropout_p=ae_drop_p, dim_1B=self.ae_dim_1B, dim_2B=ae_dim_2B, dim_1A=self.ae_dim_1A, dim_2A=ae_dim_2A, dim_1C=ae_dim_1C, dim_2C=ae_dim_2C)
+                self.ae = AESepB((input_size_A, input_size_B, input_size_C), latent_size, dropout_p=ae_drop_p, dim_1B=self.ae_dim_1B, dim_2B=ae_dim_2B, dim_1A=self.ae_dim_1A, dim_2A=ae_dim_2A, dim_1C=ae_dim_1C, dim_2C=ae_dim_2C)
         elif self.ae_net == "vae":
             if self.split_A and self.split_B:
-                self.net = VAESepAB((input_size_A, input_size_B, input_size_C), latent_size, dropout_p=ae_drop_p, dim_1B=ae_dim_1B, dim_2B=ae_dim_2B, dim_1A=ae_dim_1A, dim_2A=ae_dim_2A, dim_1C=ae_dim_1C, dim_2C=ae_dim_2C)
+                self.ae = VAESepAB((input_size_A, input_size_B, input_size_C), latent_size, dropout_p=ae_drop_p, dim_1B=ae_dim_1B, dim_2B=ae_dim_2B, dim_1A=ae_dim_1A, dim_2A=ae_dim_2A, dim_1C=ae_dim_1C, dim_2C=ae_dim_2C)
             elif self.split_B:
-                self.net = VAESepB((input_size_A, input_size_B, input_size_C), latent_size, dropout_p=ae_drop_p, dim_1B=ae_dim_1B, dim_2B=ae_dim_2B, dim_1A=ae_dim_1A, dim_2A=ae_dim_2A, dim_1C=ae_dim_1C, dim_2C=ae_dim_2C)
+                self.ae = VAESepB((input_size_A, input_size_B, input_size_C), latent_size, dropout_p=ae_drop_p, dim_1B=ae_dim_1B, dim_2B=ae_dim_2B, dim_1A=ae_dim_1A, dim_2A=ae_dim_2A, dim_1C=ae_dim_1C, dim_2C=ae_dim_2C)
         
         self.projection_size = latent_size // 2
         if self.cont_align_loss_criterion != "none":
@@ -246,9 +248,9 @@ class AutoEncoder(pl.LightningModule):
 
     def forward(self, x):
         if self.ae_net == "vae":
-            return self.net(x)
+            return self.ae(x)
         elif self.ae_net == "ae":
-            return self.net.encode(x)
+            return self.ae.encode(x)
 
     def configure_optimizers(self):
         if self.ae_optimizer == "adam":
@@ -343,8 +345,8 @@ class AutoEncoder(pl.LightningModule):
             x_B_in = self.mask_x_ch(x_B, self.mask_B_ids)
         if self.mask_C:
             x_C_in = self.mask_x_feat(x_C, self.mask_C_features)
-        h_A, h_B, h_C = self.net.encode((x_A_in, x_B_in, x_C_in))
-        h_A_unmasked, h_B_unmasked, h_C_unmasked = self.net.encode((x_A, x_B, x_C))
+        h_A, h_B, h_C = self.ae.encode((x_A_in, x_B_in, x_C_in))
+        h_A_unmasked, h_B_unmasked, h_C_unmasked = self.ae.encode((x_A, x_B, x_C))
         if self.cont_noise_loss_criterion != "none":
             cont_noise_loss = 0
             for omics_type, h_masked, h_unmasked in zip(['A', 'B', 'C'], [h_A, h_B, h_C], [h_A_unmasked, h_B_unmasked, h_C_unmasked]):
@@ -365,9 +367,9 @@ class AutoEncoder(pl.LightningModule):
             pretext_loss += self.masked_chr_prediction_weight * mask_pred_loss
             logs['{}_mask_pred_loss'.format(self.mode)] = mask_pred_loss
         if self.recon_all_thrice:
-            recon_list = self.net.decode((h_A, h_B, h_C))
+            recon_list = self.ae.decode((h_A, h_B, h_C))
         else:
-            recon_list.append(self.net.decode((h_A, h_B, h_C)))
+            recon_list.append(self.ae.decode((h_A, h_B, h_C)))
         recon_loss = 0
         for i, x_recon in enumerate(recon_list):
             x_A_recon, x_B_recon, x_C_recon = x_recon
@@ -393,7 +395,7 @@ class AutoEncoder(pl.LightningModule):
         x_A, x_B, x_C = batch['x']
         if self.mask_B:
             x_B_masked = self.mask_x_ch(x_B, self.mask_B_ids)
-            z, recon_x, mean, log_var = self.net((x_A, x_B_masked, x_C))
+            z, recon_x, mean, log_var = self.ae((x_A, x_B_masked, x_C))
             recon_B_loss = self.sum_subset_losses(recon_x[1], x_B)
             recon_loss_all = F.mse_loss(recon_x[0], x_A) + recon_B_loss + F.mse_loss(recon_x[2], x_C)
             kl_loss = -0.5 * torch.mean(1 + log_var - mean.pow(2) - log_var.exp())
@@ -403,7 +405,7 @@ class AutoEncoder(pl.LightningModule):
         
         elif self.mask_A:
             x_A_masked = self.mask_x_ch(x_A, self.mask_A_ids)
-            h, recon_x, mean, log_var = self.net((x_A_masked, x_B, x_C))
+            h, recon_x, mean, log_var = self.ae((x_A_masked, x_B, x_C))
             recon_A_loss = self.sum_subset_losses(recon_x[0], x_A)
             recon_B_loss = self.sum_subset_losses(recon_x[1], x_B)
             recon_loss_all = recon_A_loss + recon_B_loss + F.mse_loss(recon_x[2], x_C)
@@ -413,7 +415,7 @@ class AutoEncoder(pl.LightningModule):
             logs['{}_recon_A_kl_loss'.format(self.mode)] = recon_loss
 
         else:
-            h, recon_x, mean, log_var = self.net((x_A, x_B, x_C))
+            h, recon_x, mean, log_var = self.ae((x_A, x_B, x_C))
             recon_A_loss = F.mse_loss(recon_x[0], x_A)
             recon_B_loss = self.sum_subset_losses(recon_x[1], x_B)
             recon_C_loss = F.mse_loss(recon_x[2], x_C)
@@ -537,12 +539,12 @@ class AutoEncoder(pl.LightningModule):
         logs = {}
         h_A, h_B, h_C = h
         cons_loss = 0
-        h_A_recon_using_dec_B = self.net.encode_B(self.net.decode_h_B(h_A)[1])
-        h_B_recon_using_dec_A = self.net.encode_A(self.net.decode_h_A(h_B)[0])
-        h_C_recon_using_dec_A = self.net.encode_A(self.net.decode_h_A(h_C)[0])
-        h_A_recon_using_dec_C = self.net.encode_C(self.net.decode_h_C(h_A)[2])
-        h_B_recon_using_dec_C = self.net.encode_C(self.net.decode_h_C(h_B)[2])
-        h_C_recon_using_dec_B = self.net.encode_B(self.net.decode_h_B(h_C)[1])
+        h_A_recon_using_dec_B = self.ae.encode_B(self.ae.decode_h_B(h_A)[1])
+        h_B_recon_using_dec_A = self.ae.encode_A(self.ae.decode_h_A(h_B)[0])
+        h_C_recon_using_dec_A = self.ae.encode_A(self.ae.decode_h_A(h_C)[0])
+        h_A_recon_using_dec_C = self.ae.encode_C(self.ae.decode_h_C(h_A)[2])
+        h_B_recon_using_dec_C = self.ae.encode_C(self.ae.decode_h_C(h_B)[2])
+        h_C_recon_using_dec_B = self.ae.encode_B(self.ae.decode_h_B(h_C)[1])
         cons_loss += self.cons_loss(h_A_recon_using_dec_B, h_B)
         cons_loss += self.cons_loss(h_B_recon_using_dec_A, h_A)
         cons_loss += self.cons_loss(h_C_recon_using_dec_A, h_A)
@@ -552,6 +554,7 @@ class AutoEncoder(pl.LightningModule):
         return logs, cons_loss
     
     def training_step(self, batch, batch_idx):
+        self.mode = 'train'
         if self.ae_net == 'ae':
             logs, h, pretext_loss = self.ae_step(batch) 
         elif self.ae_net == 'vae':
@@ -588,6 +591,7 @@ class AutoEncoder(pl.LightningModule):
         # if self.global_step == 0: 
         #     wandb.define_metric('val_pretext_loss', summary='min')
         #     wandb.define_metric('val_recon_loss', summary='min')
+        self.mode = 'val'
         pretext_loss = 0
         if self.ae_net == 'ae':
             logs, h, recon_loss = self.ae_step(batch) 
@@ -629,20 +633,24 @@ class AutoEncoder(pl.LightningModule):
 
 
 class DownstreamModel(pl.LightningModule):
-    def __init__(self, ae_model_path, class_weights, num_classes, ae_net, latent_size, ds_lr, ds_weight_decay, ds_beta1, ds_drop_p, cl_loss, ds_lr_policy, ds_epoch_num_decay, ds_decay_step_size, max_epochs, **config):
-        super(DownstreamModel, self).__init__()
-        self.input_size = latent_size
-        self.ds_drop_p = ds_drop_p
-        self.num_classes = num_classes
-        self.ds_lr = ds_lr
-        self.ds_weight_decay = ds_weight_decay
-        self.ds_beta1 = ds_beta1
-        self.ds_lr_policy = ds_lr_policy
-        self.ds_epoch_num_decay = ds_epoch_num_decay
-        self.ds_decay_step_size = ds_decay_step_size
-        self.class_weights = class_weights
-        self.ae_net = ae_net
-        self.ds_max_epochs = max_epochs
+    def __init__(self, **config):
+        if 'ds_model_path' in config:
+            super(DownstreamModel, self).__init__(**config)
+        else:
+            super(DownstreamModel, self).__init__()
+        self.ae_model_path = config['ae_model_path']
+        self.ds_input_size = config['latent_size']
+        self.ds_drop_p = config['ds_drop_p']
+        self.num_classes = config['num_classes']
+        self.ds_lr = config['ds_lr']
+        self.ds_weight_decay = config['ds_weight_decay']
+        self.ds_beta1 = config['ds_beta1']
+        self.ds_lr_policy = config['ds_lr_policy']
+        self.ds_epoch_num_decay = config['ds_epoch_num_decay']
+        self.ds_decay_step_size = config['ds_decay_step_size']
+        self.class_weights = config['class_weights']
+        self.ae_net = config['ae_net']
+        self.ds_max_epochs = config['downstream_max_epochs']
         self.ds_task = config['ds_task']
         if self.ds_task == 'multi':
             self.ds_tasks = ['class', 'surv', 'reg']
@@ -656,31 +664,30 @@ class DownstreamModel(pl.LightningModule):
         self.ds_mask_A = config['ds_mask_A']
         self.ds_mask_B = config['ds_mask_B']
         self.ds_masking_method = config['ds_masking_method']
-        self.feature_extractor = AutoEncoder.load_from_checkpoint(ae_model_path)
-        if config['ds_freeze_ae'] == True:
-            self.feature_extractor.freeze()
+        self.ae_model = AutoEncoder.load_from_checkpoint(self.ae_model_path)
+        self.ae_model.freeze()
         self.ds_latent_agg_method = config['ds_latent_agg_method']
         self.ds_add_omics_identity = config['ds_add_omics_identity']
         if self.ds_add_omics_identity:
             self.ds_latent_agg_method = 'all'
-            latent_size += 3
-        if self.ds_latent_agg_method == 'concat':
-            latent_size *= 3
+        self.num_classes = config['num_classes']
+        self.ds_drop_p = config['ds_drop_p']
+        self.cl_loss = config['cl_loss']
         if 'class' in self.ds_tasks:
-            self.class_net = ClassifierNet(num_classes, latent_size, dropout_p=ds_drop_p)
+            self.class_net = ClassifierNet(self.num_classes, self.ds_input_size, dropout_p=self.ds_drop_p)
             self.wbce = weighted_binary_cross_entropy
             self.criterion = nn.CrossEntropyLoss()
-            self.cl_loss = cl_loss
+            self.cl_loss = self.cl_loss
         if 'surv' in self.ds_tasks:
             self.time_num = config['time_num']
-            self.surv_net = SurvivalNet(self.time_num, latent_size, dropout_p=ds_drop_p)
+            self.surv_net = SurvivalNet(self.time_num, self.ds_input_size, dropout_p=self.ds_drop_p)
             self.survival_loss = config["survival_loss"]
             if self.survival_loss == 'MTLR':
                 self.tri_matrix_1 = self.get_tri_matrix(dimension_type=1)
                 self.tri_matrix_2 = self.get_tri_matrix(dimension_type=2)   
             self.survival_T_max = config['survival_T_max']
         if 'reg' in self.ds_tasks:
-            self.reg_net = RegressionNet(latent_size, dropout_p=ds_drop_p)
+            self.reg_net = RegressionNet(self.ds_input_size, dropout_p=self.ds_drop_p)
             self.reg_loss = nn.MSELoss()
 
         self.save_hyperparameters()
@@ -710,8 +717,6 @@ class DownstreamModel(pl.LightningModule):
         parser.add_argument('--time_num', type=int, default=256, help='number of time intervals in the survival model')
         parser.add_argument('--ds_latent_agg_method', type=str, default='mean',
                                 help='method to aggregate latent representations from autoencoders of A, B and C, options: "mean", "concat", "sum", "all" (pass all latents one by one)')
-        parser.add_argument('--ds_freeze_ae', default=False, type=lambda x: (str(x).lower() == 'true'),
-                                help='whether to freeze the autoencoder for downstream model')
         parser.add_argument('--ds_save_latent_testing', default=False, type=lambda x: (str(x).lower() == 'true'),
                                 help='whether to save the latent representations of testing data')
         parser.add_argument('--ds_save_latent_training', default=False, type=lambda x: (str(x).lower() == 'true'),
@@ -750,7 +755,7 @@ class DownstreamModel(pl.LightningModule):
 
     def forward(self, x):
         if self.ae_net == 'ae':
-            h_A, h_B, h_C = self.feature_extractor(x)
+            h_A, h_B, h_C = self.ae_model(x)
             if self.ds_latent_agg_method == 'concat':
                 h = torch.cat([h_A, h_B, h_C], dim=1)
             elif self.ds_latent_agg_method == 'mean':
@@ -760,7 +765,7 @@ class DownstreamModel(pl.LightningModule):
             elif self.ds_latent_agg_method == 'all':
                 h = [h_A, h_B, h_C]
         elif self.ae_net == 'vae':
-            h, _, _, _ = self.feature_extractor(x)
+            h, _, _, _ = self.ae_model(x)
         return h
 
     def configure_optimizers(self):
@@ -930,18 +935,20 @@ class DownstreamModel(pl.LightningModule):
         return rmse
     
     def training_step(self, batch, batch_idx):
+        self.mode = 'train'
         return self.shared_step(batch)
     
     def shared_epoch_end(self, outputs):
         if 'class' in self.ds_tasks:
-            class_loss = torch.stack([x["class_loss"] for x in outputs]).mean()
-            self.log("{}_class_loss".format(self.mode), class_loss)
-            accuracy, precision, recall, f1, auc = self.compute_class_metrics(outputs)
-            self.log("{}_accuracy".format(self.mode), accuracy)
-            self.log("{}_precision".format(self.mode), precision)
-            self.log("{}_recall".format(self.mode), recall)
-            self.log("{}_f1".format(self.mode), f1)
-            self.log("{}_auc".format(self.mode), auc)
+            if 'class_loss' in outputs[0]:
+                class_loss = torch.stack([x["class_loss"] for x in outputs]).mean()
+                self.log("{}_class_loss".format(self.mode), class_loss)
+                accuracy, precision, recall, f1, auc = self.compute_class_metrics(outputs)
+                self.log("{}_accuracy".format(self.mode), accuracy)
+                self.log("{}_precision".format(self.mode), precision)
+                self.log("{}_recall".format(self.mode), recall)
+                self.log("{}_f1".format(self.mode), f1)
+                self.log("{}_auc".format(self.mode), auc)
         
         if 'surv' in self.ds_tasks:
             surv_loss = torch.stack([x["surv_loss"] for x in outputs]).mean()
@@ -966,6 +973,7 @@ class DownstreamModel(pl.LightningModule):
         return self.shared_epoch_end(outputs)
     
     def validation_step(self, batch, batch_idx):
+        self.mode = 'val'
         if self.global_step == 0: 
             if 'class' in self.ds_tasks:
                 wandb.define_metric('val_accuracy', summary='max')
@@ -979,6 +987,7 @@ class DownstreamModel(pl.LightningModule):
         return self.shared_epoch_end(outputs)
     
     def test_step(self, batch, batch_idx):
+        self.mode = 'test'
         if self.global_step == 0: 
             wandb.define_metric('test_accuracy', summary='max')
         return self.shared_step(batch)
@@ -1066,3 +1075,310 @@ class DownstreamModel(pl.LightningModule):
 
         return time_points
     
+
+class ComicsModel(DownstreamModel, AutoEncoder):
+    def __init__(self, **config):
+        super(ComicsModel, self).__init__(**config)
+        AutoEncoder.__init__(self, **config)
+        # self.ae_model_path = config['ae_model_path']
+        # self.ds_model_path = config['ds_model_path']
+        # self.input_size_A = config['input_size_A']
+        # self.input_size_B = config['input_size_B']
+        # self.input_size_C = config['input_size_C']
+        # self.batch_size = config['batch_size']
+        # self.ae_net = config['ae_net']
+        # self.ae_weight_kl = config['ae_weight_kl']
+        # self.latent_size = config['latent_size']
+        # self.ae_lr = config['ae_lr']
+        # self.ae_weight_decay = config['ae_weight_decay']
+        # self.ae_momentum = config['ae_momentum']
+        # self.ae_drop_p = config['ae_drop_p']
+        # self.ae_beta1 = config['ae_beta1']
+        # self.ae_lr_policy = config['ae_lr_policy']
+        # self.ae_epoch_num_decay = config['ae_epoch_num_decay']
+        # self.ae_decay_step_size = config['ae_decay_step_size']
+        # self.ae_max_epochs = config['pretraining_max_epochs']
+        # self.cont_align_loss_weight = config['cont_align_loss_weight']
+        # self.cont_noise_loss_weight = config['cont_noise_loss_weight']
+        # self.cont_loss_temp = config['cont_loss_temp']
+        # self.cont_loss_lambda = config['cont_loss_lambda']
+        # self.add_distance_loss_to_latent = config['add_distance_loss_to_latent']
+        # self.add_distance_loss_to_proj = config['add_distance_loss_to_proj']
+        # self.distance_loss_weight = config['distance_loss_weight']
+        # self.add_consistency_loss = config['add_consistency_loss']
+        # self.consistency_loss_weight = config['consistency_loss_weight']
+        # self.ae_optimizer = config['ae_optimizer']
+        # self.ae_use_lrscheduler = config['ae_use_lrscheduler']
+        # self.cont_align_loss_criterion = config['cont_align_loss_criterion']
+        # self.cont_noise_loss_criterion = config['cont_noise_loss_criterion']
+        # self.cont_align_loss_latent = config['cont_align_loss_latent']
+        # self.cont_loss_similarity = config['cont_loss_similarity']
+        # self.cont_loss_normalize = config['cont_loss_normalize']
+        # self.cont_loss_p_norm = config['cont_loss_p_norm']
+        # self.add_cont_type_loss = config['add_cont_type_loss']
+        # self.split_A = config['split_A']
+        # self.mask_A = config['mask_A']
+        # self.num_mask_A = config['num_mask_A']
+        # self.split_B = config['split_B']
+        # self.mask_B = config['mask_B']
+        # self.num_mask_B = config['num_mask_B']
+        # self.mask_C = config['mask_C']
+        # self.ratio_mask_C = config['ratio_mask_C']
+        # self.masking_method = config['masking_method']
+        # self.choose_masking_method_every_epoch = config['choose_masking_method_every_epoch']
+        # self.use_one_encoder = config['use_one_encoder']
+        # self.use_one_decoder = config['use_one_decoder']
+        # self.concat_latent_for_decoder = config['concat_latent_for_decoder']
+        # self.recon_all_thrice = config['recon_all_thrice']
+        # self.predict_masked_chromosomes = config['predict_masked_chromosomes']
+        # self.use_rep_trick = config['use_rep_trick']
+        # if self.ae_net == "ae":
+        #     if self.split_A and self.split_B:
+        #         self.ae_dim_1B = 128
+        #         self.ae_dim_1A = 128
+        #         self.ae = AutoEncoder.load_from_checkpoint(self.ae_model_path)
+        #     elif self.split_A:
+        #         self.ae_dim_1A = 128
+        #         self.ae_dim_1B = 1024
+        #         self.ae = AutoEncoder.load_from_checkpoint(self.ae_model_path)
+        #     elif self.split_B:
+        #         self.ae_dim_1B = 128
+        #         self.ae_dim_1A = 1024
+        #         self.ae = AutoEncoder.load_from_checkpoint(self.ae_model_path)
+        # elif self.ae_net == "vae":
+        #     if self.split_A and self.split_B:
+        #         self.ae = AutoEncoder.load_from_checkpoint(self.ae_model_path)
+        #     elif self.split_B:
+        #         self.ae = AutoEncoder.load_from_checkpoint(self.ae_model_path)
+        
+        # self.projection_size = self.latent_size // 2
+        # if self.cont_align_loss_criterion != "none":
+        #     if self.cont_align_loss_criterion == "simclr":
+        #         # self.cont_align_criterion = SimCLR_Loss(batch_size = batch_size, temperature = cont_loss_temp, latent_size=latent_size, proj_size=self.projection_size)
+        #         self.projector = SimCLRProjectionHead(self.latent_size, self.latent_size, self.projection_size)
+        #         self.cont_align_criterion = losses.NTXentLoss(temperature=self.cont_loss_temp)
+        #     elif self.cont_align_loss_criterion == "clip":
+        #         self.projector = CLIPProjectionHead(self.latent_size, self.projection_size, self.ae_drop_p)
+        #         self.cont_align_criterion = CLIPLoss(temperature = self.cont_loss_temp, latent_size = self.latent_size, proj_size = self.projection_size)
+        #     elif self.cont_align_loss_criterion == "barlowtwins":
+        #         self.cont_align_criterion = BarlowTwinsLoss(lambd=self.cont_loss_lambda, latent_size=self.latent_size, proj_size=self.projection_size)
+        #     elif self.cont_align_loss_criterion == 'ntxent':
+        #         self.cont_align_criterion = NTXentLoss(latent_dim = self.latent_size, temperature=self.cont_loss_temp, batch_size=self.batch_size, similarity=self.cont_loss_similarity, normalize=self.cont_loss_normalize, p_norm=self.cont_loss_p_norm)
+        #     elif self.cont_align_loss_criterion == 'simsiam':
+        #         self.cont_align_criterion = SimSiamLoss(latent_dim=self.latent_size)
+        
+        # if self.cont_noise_loss_criterion != "none":
+        #     if self.cont_noise_loss_criterion == "simclr":
+        #         # self.cont_noise_criterion = SimCLR_Loss(batch_size = batch_size, temperature = self.cont_loss_temp, latent_size=self.latent_size, proj_size=self.projection_size)
+        #         self.projector = SimCLRProjectionHead(self.latent_size, self.latent_size, self.projection_size)
+        #         self.cont_noise_criterion = losses.NTXentLoss(temperature=self.cont_loss_temp)
+        #     elif self.cont_noise_loss_criterion == "clip":
+        #         self.projector = CLIPProjectionHead(self.latent_size, self.projection_size, self.ae_drop_p)
+        #         self.cont_noise_criterion = CLIPLoss(temperature = self.cont_loss_temp, latent_size = self.latent_size, proj_size = self.projection_size)
+        #     elif self.cont_noise_loss_criterion == "barlowtwins":
+        #         self.cont_noise_criterion = BarlowTwinsLoss(lambd=self.cont_loss_lambda, latent_size=self.latent_size, proj_size=self.projection_size)
+        #     elif self.cont_noise_loss_criterion == 'ntxent':
+        #         self.cont_noise_criterion = NTXentLoss(latent_dim = self.latent_size, temperature=self.cont_loss_temp, batch_size=self.batch_size, similarity=self.cont_loss_similarity, normalize=self.cont_loss_normalize, p_norm=self.cont_loss_p_norm)
+        #     elif self.cont_noise_loss_criterion == 'simsiam':
+        #         self.cont_noise_criterion = SimSiamLoss(latent_dim=self.latent_size)
+        
+        # if self.add_distance_loss_to_latent or self.add_distance_loss_to_proj:
+        #     self.distance_loss_criterion = config['distance_loss_criterion']
+        #     if self.distance_loss_criterion == 'mse':
+        #         self.dist_loss = nn.MSELoss()
+        #     elif self.distance_loss_criterion == 'l1':
+        #         self.dist_loss = nn.L1Loss()
+        #     elif self.distance_loss_criterion == 'bce':
+        #         self.dist_loss = nn.BCELoss()
+        
+        # if self.add_consistency_loss:
+        #     self.cons_loss = nn.MSELoss()
+        
+        # if self.mask_B:
+        #     self.mask_B_ids = np.random.randint(0, len(self.input_size_B), size=self.num_mask_B)
+        # if self.mask_A:
+        #     self.mask_A_ids = np.random.randint(0, len(self.input_size_A), size=self.num_mask_A)
+        # if self.mask_C:
+        #     self.mask_C_features = np.random.randint(0, self.input_size_C, size=int(self.ratio_mask_C * self.input_size_C))
+        
+        # self.change_ch_to_mask_every_epoch = config['change_ch_to_mask_every_epoch']
+
+        # if self.predict_masked_chromosomes:
+        #     num_mask_total = 1
+        #     if self.split_A:
+        #         num_mask_total += len(self.input_size_A)
+        #     else:
+        #         num_mask_total += 1
+        #     if self.split_B:
+        #         num_mask_total += len(self.input_size_B)
+        #     else:
+        #         num_mask_total += 1
+        #     self.masked_chr_prediction_weight = config['masked_chr_prediction_weight']
+        #     self.mask_pred_net = ClassifierNet(num_mask_total, self.latent_size * 3, dropout_p=ae_drop_p)
+        #     self.mask_pred_criterion = nn.CrossEntropyLoss()
+
+        # self.ds_input_size = self.latent_size
+        # self.ds_drop_p = config['ds_drop_p']
+        # self.num_classes = config['num_classes']
+        # self.ds_lr = config['ds_lr']
+        # self.ds_weight_decay = config['ds_weight_decay']
+        # self.ds_beta1 = config['ds_beta1']
+        # self.ds_lr_policy = config['ds_lr_policy']
+        # self.ds_epoch_num_decay = config['ds_epoch_num_decay']
+        # self.ds_decay_step_size = config['ds_decay_step_size']
+        # self.class_weights = config['class_weights']
+        # self.ae_net = config['ae_net']
+        # self.ds_max_epochs = config['downstream_max_epochs']
+        # self.ds_task = config['ds_task']
+        # if self.ds_task == 'multi':
+        #     self.ds_tasks = ['class', 'surv', 'reg']
+        # else:
+        #     self.ds_tasks = [self.ds_task]
+        # self.ds_k_class = config['ds_k_class']
+        # self.ds_k_surv = config['ds_k_surv']
+        # self.ds_k_reg = config['ds_k_reg']
+        # self.ds_save_latent_testing = config['ds_save_latent_testing']
+        # self.ds_save_latent_training = config['ds_save_latent_training']
+        # self.ds_mask_A = config['ds_mask_A']
+        # self.ds_mask_B = config['ds_mask_B']
+        # self.ds_masking_method = config['ds_masking_method']
+        # # self.ae = AutoEncoder.load_from_checkpoint(self.ae_model_path)
+        # # if config['ds_freeze_ae'] == True:
+        # #     self.ae.freeze()
+        # self.ds_latent_agg_method = config['ds_latent_agg_method']
+        # self.ds_add_omics_identity = config['ds_add_omics_identity']
+        # if self.ds_add_omics_identity:
+        #     self.ds_latent_agg_method = 'all'
+        # self.ds_model = DownstreamModel.load_from_checkpoint(self.ds_model_path)
+        # if 'class' in self.ds_tasks:
+        #     self.class_net = self.ds_model.class_net
+        #     self.wbce = weighted_binary_cross_entropy
+        #     self.criterion = nn.CrossEntropyLoss()
+        #     self.cl_loss = self.cl_loss
+        # if 'surv' in self.ds_tasks:
+        #     self.time_num = config['time_num']
+        #     self.surv_net = self.ds_model.surv_net
+        #     self.survival_loss = config["survival_loss"]
+        #     if self.survival_loss == 'MTLR':
+        #         self.tri_matrix_1 = self.get_tri_matrix(dimension_type=1)
+        #         self.tri_matrix_2 = self.get_tri_matrix(dimension_type=2)   
+        #     self.survival_T_max = config['survival_T_max']
+        # if 'reg' in self.ds_tasks:
+        #     self.reg_net = self.ds_model.reg_net
+        #     self.reg_loss = nn.MSELoss()
+
+        self.ae_model_path = config['ae_model_path']
+        self.ds_model_path = config['ds_model_path']
+        self.ae_model = AutoEncoder.load_from_checkpoint(self.ae_model_path)
+        self.ae_model.unfreeze()
+        self.ae = self.ae_model.ae
+        self.ds = DownstreamModel.load_from_checkpoint(self.ds_model_path)
+        if 'class' in self.ds_tasks:
+            self.class_net = self.ds.class_net
+        if 'surv' in self.ds_tasks:
+            self.surv_net = self.ds.surv_net
+        if 'reg' in self.ds_tasks:
+            self.reg_net = self.ds.reg_net
+        self.cs_pretext_weight = config['cs_pretext_weight']
+        self.save_hyperparameters()
+        
+
+    # def forward(self, x):
+    #     if self.ae_net == "vae":
+    #         h_A, h_B, h_C = self.ae(x)
+    #         if self.ds_latent_agg_method == 'concat':
+    #             h = torch.cat([h_A, h_B, h_C], dim=1)
+    #         elif self.ds_latent_agg_method == 'mean':
+    #             h = torch.mean(torch.stack([h_A, h_B, h_C]), axis=0)
+    #         elif self.ds_latent_agg_method == 'sum':
+    #             h = torch.sum(torch.stack([h_A, h_B, h_C]), axis=0)
+    #         elif self.ds_latent_agg_method == 'all':
+    #             h = [h_A, h_B, h_C]
+    #     elif self.ae_net == 'vae':
+    #         h, _, _, _ = self.ae(x)
+    #     return h
+
+    @staticmethod
+    def add_model_specific_args(parent_parser):
+        parser = parent_parser.add_argument_group("ComicsModel")
+        parser.add_argument("--cs_pretext_weight", type=float, default=0.5)
+        return parent_parser
+    
+    def train(self, mode=True):
+        super().train(mode)
+        self.mode = "train"
+    
+    def eval(self):
+        super().eval()
+        self.mode = "val"
+    
+    def on_test_start(self):
+        super().on_test_start()
+        self.mode = "test"
+    
+    def configure_optimizers(self):
+        optimizers, schedulers = [], []
+        if self.ae_optimizer == "adam":
+            optimizers.append(optim.Adam(self.ae_model.parameters(), lr=self.ae_lr, weight_decay=self.ae_weight_decay))
+        if self.ae_optimizer == "lars":
+            optimizers.append(LARS(self.ae_model.parameters(), lr=self.ae_lr, weight_decay=self.ae_weight_decay))
+        if self.ae_use_lrscheduler:
+            schedulers.append(optim.lr_scheduler.CosineAnnealingLR(optimizers[-1],
+                                                            T_max=500,
+                                                            eta_min=self.hparams.ae_lr/50))
+        optimizers.append(optim.Adam(self.ds.parameters(), lr=self.ds_lr, weight_decay=self.ds_weight_decay, betas=(self.ds_beta1, 0.999)))
+        if self.ds_lr_policy == 'linear':
+            def lambda_rule(epoch):
+                lr_lambda = 1.0 - max(0, epoch - self.ds_max_epochs + self.ds_epoch_num_decay) / float(self.ds_epoch_num_decay + 1)
+                return lr_lambda
+            # lr_scheduler is imported from torch.optim
+            schedulers.append(lr_scheduler.LambdaLR(optimizers[-1], lr_lambda=lambda_rule))
+        elif self.ds_lr_policy == 'step':
+            schedulers.append(lr_scheduler.StepLR(optimizers[-1], step_size=self.ds_decay_step_size, gamma=0.1))
+        elif self.ds_lr_policy == 'plateau':
+            schedulers.append(lr_scheduler.ReduceLROnPlateau(optimizers[-1], mode='min', factor=0.2, threshold=0.01, patience=5))
+        elif self.ds_lr_policy == 'cosine':
+            schedulers.append(lr_scheduler.CosineAnnealingLR(optimizers[-1], T_max=self.ds_max_epochs, eta_min=0))
+        return optimizers, schedulers
+
+    def training_step(self, batch, batch_idx, optimizer_idx):
+        self.mode = "train"
+        if optimizer_idx == 0:
+            pretext_loss = self.ae_model.training_step(batch, batch_idx)
+            self.log('train_pretext_loss', pretext_loss, on_step=False, on_epoch=True)
+            return pretext_loss
+        elif optimizer_idx == 1:
+            ds_dict = self.ds.training_step(batch, batch_idx)
+            # total_loss = self.cs_pretext_weight * pretext_loss + ds_dict['loss']
+            # self.log('train_comics_loss', total_loss, on_step=False, on_epoch=True)
+            return {'loss': ds_dict['loss'], **ds_dict}
+    
+    def validation_step(self, batch, batch_idx):
+        self.mode = "val"
+        ae_dict = self.ae_model.validation_step(batch, batch_idx)
+        ds_dict = self.ds.validation_step(batch, batch_idx)
+        total_loss = self.cs_pretext_weight * ae_dict['{}_pretext_loss'.format(self.mode)]
+        if 'class' in self.ds_tasks:
+            total_loss += ds_dict['class_loss']
+        if 'surv' in self.ds_tasks:
+            total_loss += ds_dict['surv_loss']
+        if 'reg' in self.ds_tasks:
+            total_loss += ds_dict['reg_loss']
+        self.log('{}_comics_loss'.format(self.mode), total_loss, on_step=False, on_epoch=True)
+        return {'{}_comics_loss'.format(self.mode): total_loss, **ds_dict, **ae_dict}
+
+    
+    def test_step(self, batch, batch_idx):
+        self.mode = "test"
+        ae_dict = self.ae_model.validation_step(batch, batch_idx)
+        ds_dict = self.ds.test_step(batch, batch_idx)
+        total_loss = self.cs_pretext_weight * ae_dict['val_pretext_loss']
+        if 'class' in self.ds_tasks:
+            total_loss += ds_dict['class_loss']
+        if 'surv' in self.ds_tasks:
+            total_loss += ds_dict['surv_loss']
+        if 'reg' in self.ds_tasks:
+            total_loss += ds_dict['reg_loss']
+        self.log('{}_comics_loss'.format(self.mode), total_loss, on_step=False, on_epoch=True)
+        return {'{}_comics_loss'.format(self.mode): total_loss, **ds_dict, **ae_dict}
+
