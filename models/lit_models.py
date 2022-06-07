@@ -939,16 +939,16 @@ class DownstreamModel(pl.LightningModule):
         return self.shared_step(batch)
     
     def shared_epoch_end(self, outputs):
-        if 'class' in self.ds_tasks:
-            if 'class_loss' in outputs[0]:
-                class_loss = torch.stack([x["class_loss"] for x in outputs]).mean()
-                self.log("{}_class_loss".format(self.mode), class_loss)
-                accuracy, precision, recall, f1, auc = self.compute_class_metrics(outputs)
-                self.log("{}_accuracy".format(self.mode), accuracy)
-                self.log("{}_precision".format(self.mode), precision)
-                self.log("{}_recall".format(self.mode), recall)
-                self.log("{}_f1".format(self.mode), f1)
-                self.log("{}_auc".format(self.mode), auc)
+    #     if 'class' in self.ds_tasks:
+        if 'class_loss' in outputs[0]:
+            class_loss = torch.stack([x["class_loss"] for x in outputs]).mean()
+            self.log("{}_class_loss".format(self.mode), class_loss)
+            accuracy, precision, recall, f1, auc = self.compute_class_metrics(outputs)
+            self.log("{}_accuracy".format(self.mode), accuracy)
+            self.log("{}_precision".format(self.mode), precision)
+            self.log("{}_recall".format(self.mode), recall)
+            self.log("{}_f1".format(self.mode), f1)
+            self.log("{}_auc".format(self.mode), auc)
         
         if 'surv' in self.ds_tasks:
             surv_loss = torch.stack([x["surv_loss"] for x in outputs]).mean()
@@ -1281,22 +1281,6 @@ class ComicsModel(DownstreamModel, AutoEncoder):
             self.reg_net = self.ds.reg_net
         self.cs_pretext_weight = config['cs_pretext_weight']
         self.save_hyperparameters()
-        
-
-    # def forward(self, x):
-    #     if self.ae_net == "vae":
-    #         h_A, h_B, h_C = self.ae(x)
-    #         if self.ds_latent_agg_method == 'concat':
-    #             h = torch.cat([h_A, h_B, h_C], dim=1)
-    #         elif self.ds_latent_agg_method == 'mean':
-    #             h = torch.mean(torch.stack([h_A, h_B, h_C]), axis=0)
-    #         elif self.ds_latent_agg_method == 'sum':
-    #             h = torch.sum(torch.stack([h_A, h_B, h_C]), axis=0)
-    #         elif self.ds_latent_agg_method == 'all':
-    #             h = [h_A, h_B, h_C]
-    #     elif self.ae_net == 'vae':
-    #         h, _, _, _ = self.ae(x)
-    #     return h
 
     @staticmethod
     def add_model_specific_args(parent_parser):
@@ -1318,15 +1302,16 @@ class ComicsModel(DownstreamModel, AutoEncoder):
     
     def configure_optimizers(self):
         optimizers, schedulers = [], []
-        if self.ae_optimizer == "adam":
-            optimizers.append(optim.Adam(self.ae_model.parameters(), lr=self.ae_lr, weight_decay=self.ae_weight_decay))
-        if self.ae_optimizer == "lars":
-            optimizers.append(LARS(self.ae_model.parameters(), lr=self.ae_lr, weight_decay=self.ae_weight_decay))
-        if self.ae_use_lrscheduler:
-            schedulers.append(optim.lr_scheduler.CosineAnnealingLR(optimizers[-1],
-                                                            T_max=500,
-                                                            eta_min=self.hparams.ae_lr/50))
-        optimizers.append(optim.Adam(self.ds.parameters(), lr=self.ds_lr, weight_decay=self.ds_weight_decay, betas=(self.ds_beta1, 0.999)))
+        # if self.ae_optimizer == "adam":
+        #     optimizers.append(optim.Adam(self.ae_model.parameters(), lr=self.ae_lr, weight_decay=self.ae_weight_decay))
+        # if self.ae_optimizer == "lars":
+        #     optimizers.append(LARS(self.ae_model.parameters(), lr=self.ae_lr, weight_decay=self.ae_weight_decay))
+        # if self.ae_use_lrscheduler:
+        #     schedulers.append(optim.lr_scheduler.CosineAnnealingLR(optimizers[-1],
+        #                                                     T_max=500,
+        #                                                     eta_min=self.hparams.ae_lr/50))
+        # optimizers.append(optim.Adam(self.ds.parameters(), lr=self.ds_lr, weight_decay=self.ds_weight_decay, betas=(self.ds_beta1, 0.999)))
+        optimizers.append(optim.Adam(list(self.ds.parameters()) + list(self.ae_model.parameters()), lr=self.ds_lr, weight_decay=self.ds_weight_decay, betas=(self.ds_beta1, 0.999)))
         if self.ds_lr_policy == 'linear':
             def lambda_rule(epoch):
                 lr_lambda = 1.0 - max(0, epoch - self.ds_max_epochs + self.ds_epoch_num_decay) / float(self.ds_epoch_num_decay + 1)
@@ -1341,25 +1326,33 @@ class ComicsModel(DownstreamModel, AutoEncoder):
             schedulers.append(lr_scheduler.CosineAnnealingLR(optimizers[-1], T_max=self.ds_max_epochs, eta_min=0))
         return optimizers, schedulers
 
-    def training_step(self, batch, batch_idx, optimizer_idx):
+    def training_step(self, batch, batch_idx):
         self.mode = "train"
-        if optimizer_idx == 0:
-            pretext_loss = self.ae_model.training_step(batch, batch_idx)
-            self.log('train_pretext_loss', pretext_loss, on_step=False, on_epoch=True)
-            return pretext_loss
-        elif optimizer_idx == 1:
-            ds_dict = self.ds.training_step(batch, batch_idx)
-            self.log('train_class_loss', ds_dict['loss'], on_step=False, on_epoch=True)
-            # total_loss = self.cs_pretext_weight * pretext_loss + ds_dict['loss']
-            # self.log('train_comics_loss', total_loss, on_step=False, on_epoch=True)
-            return {'loss': ds_dict['loss'], **ds_dict}
+        # if optimizer_idx == 0:
+        #     pretext_loss = self.ae_model.training_step(batch, batch_idx)
+        #     self.log('train_pretext_loss', pretext_loss, on_step=False, on_epoch=True)
+        #     return pretext_loss
+        # elif optimizer_idx == 1:
+        #     ds_dict = self.ds.training_step(batch, batch_idx)
+        #     self.log('train_class_loss', ds_dict['loss'], on_step=False, on_epoch=True)
+        #     # total_loss = self.cs_pretext_weight * pretext_loss + ds_dict['loss']
+        #     # self.log('train_comics_loss', total_loss, on_step=False, on_epoch=True)
+        #     return {'loss': ds_dict['loss'], **ds_dict}
+
+        pretext_loss = self.ae_model.training_step(batch, batch_idx)
+        # self.log('train_pretext_loss', pretext_loss, on_step=False, on_epoch=True)
+        ds_dict = self.ds.training_step(batch, batch_idx)
+        # self.log('train_class_loss', ds_dict['loss'], on_step=False, on_epoch=True)
+        total_loss = self.cs_pretext_weight * pretext_loss + ds_dict['loss']
+        self.log('train_comics_loss', total_loss, on_step=False, on_epoch=True)
+        return {'loss': total_loss, **ds_dict}
     
     def validation_step(self, batch, batch_idx):
         self.mode = "val"
         ae_dict = self.ae_model.validation_step(batch, batch_idx)
         ds_dict = self.ds.validation_step(batch, batch_idx)
         pretext_loss = ae_dict['{}_pretext_loss'.format(self.mode)]
-        self.log('val_pretext_loss', pretext_loss, on_step=False, on_epoch=True)
+        # self.log('val_pretext_loss', pretext_loss, on_step=False, on_epoch=True)
         down_loss = 0
         if 'class' in self.ds_tasks:
             down_loss += ds_dict['class_loss']
@@ -1367,7 +1360,7 @@ class ComicsModel(DownstreamModel, AutoEncoder):
             down_loss += ds_dict['surv_loss']
         if 'reg' in self.ds_tasks:
             down_loss += ds_dict['reg_loss']
-        self.log('val_class_loss', down_loss, on_step=False, on_epoch=True)
+        # self.log('val_class_loss', down_loss, on_step=False, on_epoch=True)
         total_loss = self.cs_pretext_weight * pretext_loss + down_loss
         self.log('{}_comics_loss'.format(self.mode), total_loss, on_step=False, on_epoch=True)
         return {'{}_comics_loss'.format(self.mode): total_loss, **ds_dict, **ae_dict}
