@@ -121,9 +121,9 @@
                 "--pretraining_patience", "35",
                 "--downstream_patience", "35",
                 "--comics_patience", "35",
-                "--pretraining_max_epochs", "1",
-                "--downstream_max_epochs", "1",
-                "--comics_max_epochs", "1",
+                "--pretraining_max_epochs", "50",
+                "--downstream_max_epochs", "50",
+                "--comics_max_epochs", "150",
                 "--ae_lr", "0.001",
                 
                 "--ds_latent_agg_method", "sum",

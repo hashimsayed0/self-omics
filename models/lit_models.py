@@ -1301,7 +1301,7 @@ class ComicsModel(DownstreamModel, AutoEncoder):
     @staticmethod
     def add_model_specific_args(parent_parser):
         parser = parent_parser.add_argument_group("ComicsModel")
-        parser.add_argument("--cs_pretext_weight", type=float, default=0.5)
+        parser.add_argument("--cs_pretext_weight", type=float, default=1.0)
         return parent_parser
     
     def train(self, mode=True):
@@ -1349,6 +1349,7 @@ class ComicsModel(DownstreamModel, AutoEncoder):
             return pretext_loss
         elif optimizer_idx == 1:
             ds_dict = self.ds.training_step(batch, batch_idx)
+            self.log('train_class_loss', ds_dict['loss'], on_step=False, on_epoch=True)
             # total_loss = self.cs_pretext_weight * pretext_loss + ds_dict['loss']
             # self.log('train_comics_loss', total_loss, on_step=False, on_epoch=True)
             return {'loss': ds_dict['loss'], **ds_dict}
@@ -1357,13 +1358,17 @@ class ComicsModel(DownstreamModel, AutoEncoder):
         self.mode = "val"
         ae_dict = self.ae_model.validation_step(batch, batch_idx)
         ds_dict = self.ds.validation_step(batch, batch_idx)
-        total_loss = self.cs_pretext_weight * ae_dict['{}_pretext_loss'.format(self.mode)]
+        pretext_loss = ae_dict['{}_pretext_loss'.format(self.mode)]
+        self.log('val_pretext_loss', pretext_loss, on_step=False, on_epoch=True)
+        down_loss = 0
         if 'class' in self.ds_tasks:
-            total_loss += ds_dict['class_loss']
+            down_loss += ds_dict['class_loss']
         if 'surv' in self.ds_tasks:
-            total_loss += ds_dict['surv_loss']
+            down_loss += ds_dict['surv_loss']
         if 'reg' in self.ds_tasks:
-            total_loss += ds_dict['reg_loss']
+            down_loss += ds_dict['reg_loss']
+        self.log('val_class_loss', down_loss, on_step=False, on_epoch=True)
+        total_loss = self.cs_pretext_weight * pretext_loss + down_loss
         self.log('{}_comics_loss'.format(self.mode), total_loss, on_step=False, on_epoch=True)
         return {'{}_comics_loss'.format(self.mode): total_loss, **ds_dict, **ae_dict}
 
