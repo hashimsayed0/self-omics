@@ -41,6 +41,14 @@ class ABCDataModule(LightningDataModule):
         self.use_test_as_val_for_downstream = config['use_test_as_val_for_downstream']
         self.prediction_data = config['prediction_data']
         self.mode = 'pretraining'
+        self.train_in_phases = config['train_in_phases']
+        config['p3_data_ratio'] = config['p2_data_ratio'] ### IMPORTANT: Remove after debugging
+        self.phase = 'p1'
+        self.data_ratios = {
+            'p1': config['p1_data_ratio'],
+            'p2': config['p2_data_ratio'],
+            'p3': config['p3_data_ratio'],
+        }
         # self.save_hyperparameters()
         self.load_data()
         self.preprocess_data()
@@ -68,8 +76,14 @@ class ABCDataModule(LightningDataModule):
                                 help='if True, B is added with zeros for samples that have data for A and C, but not B, should only be used with ds_mask_B')
         parser.add_argument('--augment_A', default=False, type=lambda x: (str(x).lower() == 'true'),
                                 help='if True, A is added with zeros for samples that have data for B and C, but not A, should only be used with ds_mask_A')
-        
-
+        parser.add_argument('--train_in_phases', default=False, type=lambda x: (str(x).lower() == 'true'),
+                                help='if True, train in 3 phases, otherwise train in one epoch')
+        parser.add_argument('--p1_data_ratio', type=float, default=1.0,
+                                help='ratio of data to be used for phase 1')
+        parser.add_argument('--p2_data_ratio', type=float, default=1.0,
+                                help='ratio of data to be used for phase 2')
+        parser.add_argument('--p3_data_ratio', type=float, default=1.0,
+                                help='ratio of data to be used for phase 3')
         parser.add_argument("--feature_selection", type=str, default="none", help="options: none, f_test, chi2, mutual_info, all")
         parser.add_argument("--feature_selection_alpha", type=float, default=0.01)
         parser.add_argument("--feature_selection_percentile", type=float, default=10)
@@ -277,34 +291,45 @@ class ABCDataModule(LightningDataModule):
         return class_weights
 
     def setup(self, stage = None):
+        if self.train_in_phases:
+            ratio = self.data_ratios[self.phase]
+            train_index = np.random.choice(self.train_index, size=int(ratio * len(self.train_index)), replace=False)
+            test_index = np.random.choice(self.test_index, size=int(ratio * len(self.test_index)), replace=False)
+            val_index = np.random.choice(self.val_index, size=int(ratio * len(self.val_index)), replace=False)
+        else:
+            train_index = self.train_index
+            test_index = self.test_index
+            val_index = self.val_index
+
         if self.mode == 'pretraining':
             if stage == "fit" or stage is None:
-                self.trainset = ABCDataset(self.A_df, self.B_df, self.C_df, self.train_index, self.split_A, self.split_B, self.ds_tasks, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor, self.values)
-                self.valset = ABCDataset(self.A_df, self.B_df, self.C_df, self.val_index, self.split_A, self.split_B, self.ds_tasks, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor, self.values)
+                self.trainset = ABCDataset(self.A_df, self.B_df, self.C_df, train_index, self.split_A, self.split_B, self.ds_tasks, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor, self.values)
+                self.valset = ABCDataset(self.A_df, self.B_df, self.C_df, val_index, self.split_A, self.split_B, self.ds_tasks, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor, self.values)
             
             if stage == "test" or stage is None or stage == "predict":
-                self.testset = ABCDataset(self.A_df, self.B_df, self.C_df, self.test_index, self.split_A, self.split_B, self.ds_tasks, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor, self.values)
+                self.testset = ABCDataset(self.A_df, self.B_df, self.C_df, test_index, self.split_A, self.split_B, self.ds_tasks, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor, self.values)
+        
         elif self.mode == 'downstream':
             if stage == "fit" or stage is None:
                 if self.use_test_as_val_for_downstream:
-                    self.trainset = ABCDataset(self.A_df, self.B_df, self.C_df, np.concatenate((self.train_index, self.val_index)), self.split_A, self.split_B, self.ds_tasks, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor, self.values)
-                    self.valset = ABCDataset(self.A_df, self.B_df, self.C_df, self.test_index, self.split_A, self.split_B, self.ds_tasks, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor, self.values)
+                    self.trainset = ABCDataset(self.A_df, self.B_df, self.C_df, np.concatenate((train_index, val_index)), self.split_A, self.split_B, self.ds_tasks, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor, self.values)
+                    self.valset = ABCDataset(self.A_df, self.B_df, self.C_df, test_index, self.split_A, self.split_B, self.ds_tasks, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor, self.values)
                 else:
-                    self.trainset = ABCDataset(self.A_df, self.B_df, self.C_df, self.train_index, self.split_A, self.split_B, self.ds_tasks, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor, self.values)
-                    self.valset = ABCDataset(self.A_df, self.B_df, self.C_df, self.val_index, self.split_A, self.split_B, self.ds_tasks, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor, self.values)
+                    self.trainset = ABCDataset(self.A_df, self.B_df, self.C_df, train_index, self.split_A, self.split_B, self.ds_tasks, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor, self.values)
+                    self.valset = ABCDataset(self.A_df, self.B_df, self.C_df, val_index, self.split_A, self.split_B, self.ds_tasks, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor, self.values)
             
             if stage == "test" or stage is None:
-                self.testset = ABCDataset(self.A_df, self.B_df, self.C_df, self.test_index, self.split_A, self.split_B, self.ds_tasks, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor, self.values)
+                self.testset = ABCDataset(self.A_df, self.B_df, self.C_df, test_index, self.split_A, self.split_B, self.ds_tasks, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor, self.values)
 
             if stage == "predict" or stage is None:
                 if self.prediction_data == 'train':
-                    self.predset = ABCDataset(self.A_df, self.B_df, self.C_df, self.train_index, self.split_A, self.split_B, self.ds_tasks, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor, self.values)
+                    self.predset = ABCDataset(self.A_df, self.B_df, self.C_df, train_index, self.split_A, self.split_B, self.ds_tasks, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor, self.values)
                 elif self.prediction_data == 'val':
-                    self.predset = ABCDataset(self.A_df, self.B_df, self.C_df, self.val_index, self.split_A, self.split_B, self.ds_tasks, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor, self.values)
+                    self.predset = ABCDataset(self.A_df, self.B_df, self.C_df, val_index, self.split_A, self.split_B, self.ds_tasks, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor, self.values)
                 elif self.prediction_data == 'test':
-                    self.predset = ABCDataset(self.A_df, self.B_df, self.C_df, self.test_index, self.split_A, self.split_B, self.ds_tasks, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor, self.values)
+                    self.predset = ABCDataset(self.A_df, self.B_df, self.C_df, test_index, self.split_A, self.split_B, self.ds_tasks, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor, self.values)
                 elif self.prediction_data == 'all':
-                    self.predset = ABCDataset(self.A_df, self.B_df, self.C_df, np.concatenate((self.train_index, self.val_index, self.test_index)), self.split_A, self.split_B, self.ds_tasks, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor, self.values)
+                    self.predset = ABCDataset(self.A_df, self.B_df, self.C_df, np.concatenate((train_index, val_index, test_index)), self.split_A, self.split_B, self.ds_tasks, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor, self.values)
 
     def train_dataloader(self):
         return DataLoader(self.trainset, batch_size=self.batch_size, num_workers=self.num_workers)

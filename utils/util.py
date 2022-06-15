@@ -2,13 +2,13 @@ import argparse
 from pytorch_lightning import Trainer, seed_everything
 import torch
 import numpy as np
-from models.lit_models import AutoEncoder, DownstreamModel, ComicsModel
+from models.lit_models import AutoEncoder, DownstreamModel, ComicsModel, Comics
 import pytorch_lightning.loggers as pl_loggers
 from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
 import os
 from .datamodules import ABCDataModule
 
-def parse_arguments():
+def parse_arguments(train_in_phases=False):
     parser = argparse.ArgumentParser(description='Runs the specified command')
 
     # general arguments
@@ -29,17 +29,14 @@ def parse_arguments():
     
     # trainer related arguments
     parser.add_argument("--exp_name", type=str, default="test")
-    parser.add_argument("--pretraining_patience", type=int, default=35)
-    parser.add_argument("--downstream_patience", type=int, default=35)
-    parser.add_argument("--comics_patience", type=int, default=50)
-    parser.add_argument("--pretraining_max_epochs", type=int, default=50)
-    parser.add_argument("--downstream_max_epochs", type=int, default=50)
-    parser.add_argument("--comics_max_epochs", type=int, default=100)
     
     parser = ABCDataModule.add_data_module_args(parser)
-    parser = AutoEncoder.add_model_specific_args(parser)
-    parser = DownstreamModel.add_model_specific_args(parser)
-    parser = ComicsModel.add_model_specific_args(parser)
+    
+    if train_in_phases:
+        parser = Comics.add_model_specific_args(parser)
+    else:
+        parser = AutoEncoder.add_model_specific_args(parser)
+        parser = DownstreamModel.add_model_specific_args(parser)
 
     # add all the available trainer options to argparse
     # ie: now --gpus --num_nodes ... --fast_dev_run all work in the cli
@@ -111,8 +108,36 @@ def define_callbacks_loggers_downstream(param, checkpoint_path, count):
     # return early_stopping, model_checkpoint, wandb_logger, csv_logger
     return early_stopping, model_checkpoint, csv_logger
 
-def define_callbacks_loggers_comics(param, checkpoint_path, count):
-    early_stopping_key = 'val_comics_loss'
+def define_callbacks_loggers_p1(param, checkpoint_path, count):
+    if param.mask_B:
+        if param.ae_net == 'vae':
+            callback_key = 'val_recon_B_kl_loss'
+        elif param.ae_net == 'ae':
+            callback_key = 'val_recon_all_loss'
+    elif param.mask_A:
+        if param.ae_net == 'vae':
+            callback_key = 'val_recon_A_kl_loss'
+        elif param.ae_net == 'ae':
+            if param.recon_all_thrice:
+                callback_key = 'val_total_recon_all_loss'   
+            else: 
+                callback_key = 'val_recon_all_loss'
+    else:
+        callback_key = 'val_recon_loss'
+    if param.cont_align_loss_criterion != 'none' or param.cont_noise_loss_criterion != 'none' or param.add_distance_loss:
+        callback_key = 'val_pretext_loss'
+    
+    param.max_epochs = param.cs_p1_max_epochs
+    param.min_epochs = 0
+    csv_logger = pl_loggers.CSVLogger(checkpoint_path, name='p1')
+    early_stopping = EarlyStopping(callback_key, patience=param.cs_p1_patience, verbose=True)
+    model_checkpoint = ModelCheckpoint(csv_logger.log_dir, monitor=callback_key, mode='min', save_top_k=1)
+    wandb_logger = pl_loggers.WandbLogger(project = 'tcga_contrastive', group = '{}-p1'.format(param.exp_name), name = 'fold-{f}-p1-v{v}'.format(f=count, v=csv_logger.version), offline=False)
+    return early_stopping, model_checkpoint, wandb_logger, csv_logger
+
+
+def define_callbacks_loggers_p2(param, checkpoint_path, count):
+    early_stopping_key = 'val_{}_loss'.format(param.ds_task)
     if param.ds_task == 'class':
         callback_key = 'val_{}'.format(param.ds_class_callback_key)
     elif param.ds_task == 'surv':
@@ -121,8 +146,27 @@ def define_callbacks_loggers_comics(param, checkpoint_path, count):
         callback_key = 'val_{}'.format(param.ds_reg_callback_key)
     elif param.ds_task == 'multi':
         callback_key = 'val_down_loss'
-    param.max_epochs = param.comics_max_epochs
-    csv_logger = pl_loggers.CSVLogger(checkpoint_path, name='comics')
-    early_stopping = EarlyStopping(early_stopping_key, patience=param.comics_patience)
+        early_stopping_key = 'val_down_loss'
+    param.max_epochs = param.cs_p2_max_epochs
+    csv_logger = pl_loggers.CSVLogger(checkpoint_path, name='p2')
+    early_stopping = EarlyStopping(early_stopping_key, patience=param.cs_p2_patience, verbose=True)
     model_checkpoint = ModelCheckpoint(csv_logger.log_dir, monitor=callback_key, mode='max', save_top_k=1)
-    return early_stopping, model_checkpoint, csv_logger
+    wandb_logger = pl_loggers.WandbLogger(project = 'tcga_contrastive', group = '{}-p2'.format(param.exp_name), name = 'fold-{f}-p2-v{v}'.format(f=count, v=csv_logger.version), offline=False)
+    return early_stopping, model_checkpoint, csv_logger, wandb_logger
+
+def define_callbacks_loggers_p3(param, checkpoint_path, count):
+    early_stopping_key = 'val_total_loss'
+    if param.ds_task == 'class':
+        callback_key = 'val_{}'.format(param.ds_class_callback_key)
+    elif param.ds_task == 'surv':
+        callback_key = 'val_{}'.format(param.ds_surv_callback_key)
+    elif param.ds_task == 'reg':
+        callback_key = 'val_{}'.format(param.ds_reg_callback_key)
+    elif param.ds_task == 'multi':
+        callback_key = 'val_down_loss'
+    param.max_epochs = param.cs_p3_max_epochs
+    csv_logger = pl_loggers.CSVLogger(checkpoint_path, name='p3')
+    early_stopping = EarlyStopping(early_stopping_key, patience=param.cs_p3_patience, verbose=True)
+    model_checkpoint = ModelCheckpoint(csv_logger.log_dir, monitor=callback_key, mode='max', save_top_k=1)
+    wandb_logger = pl_loggers.WandbLogger(project = 'tcga_contrastive', group = '{}-p3'.format(param.exp_name), name = 'fold-{f}-p3-v{v}'.format(f=count, v=csv_logger.version), offline=False)
+    return early_stopping, model_checkpoint, csv_logger, wandb_logger
