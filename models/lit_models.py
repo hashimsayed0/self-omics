@@ -244,6 +244,8 @@ class AutoEncoder(pl.LightningModule):
                                 help='if True, latent vectors from A, B and C are concatenated before being fed into the decoder')
         parser.add_argument('--use_rep_trick', default=False, type=lambda x: (str(x).lower() == 'true'),
                                 help='use reparameterization in trick in ae')
+        parser.add_argument('--pretraining_max_epochs', type=int, default=50, help='maximum number of epochs for pretraining')
+        parser.add_argument('--pretraining_patience', type=int, default=35, help='patience for pretraining')
         return parent_parser
 
     def forward(self, x):
@@ -737,6 +739,9 @@ class DownstreamModel(pl.LightningModule):
         parser.add_argument("--load_pretrained_ds", default=False, type=lambda x: (str(x).lower() == 'true'),
                                 help='load pretrained downstream model')
         parser.add_argument("--pretrained_ds_path", type=str, default="")
+        parser.add_argument('--downstream_max_epochs', type=int, default=150, help='maximum number of epochs for downstream')
+        parser.add_argument('--downstream_patience', type=int, default=35, help='patience for downstream')
+        
         return parent_parser
 
     def train(self, mode=True):
@@ -932,12 +937,10 @@ class DownstreamModel(pl.LightningModule):
         return rmse
     
     def training_step(self, batch, batch_idx):
-        self.mode = 'train'
         return self.shared_step(batch)
     
     def shared_epoch_end(self, outputs):
         if 'class' in self.ds_tasks:
-        # if 'class_loss' in outputs[0]:
             class_loss = torch.stack([x["class_loss"] for x in outputs]).mean()
             self.log("{}_class_loss".format(self.mode), class_loss)
             accuracy, precision, recall, f1, auc = self.compute_class_metrics(outputs)
@@ -970,7 +973,6 @@ class DownstreamModel(pl.LightningModule):
         return self.shared_epoch_end(outputs)
     
     def validation_step(self, batch, batch_idx):
-        self.mode = 'val'
         if self.global_step == 0: 
             if 'class' in self.ds_tasks:
                 wandb.define_metric('val_accuracy', summary='max')
@@ -984,7 +986,6 @@ class DownstreamModel(pl.LightningModule):
         return self.shared_epoch_end(outputs)
     
     def test_step(self, batch, batch_idx):
-        self.mode = 'test'
         if self.global_step == 0: 
             wandb.define_metric('test_accuracy', summary='max')
         return self.shared_step(batch)
@@ -2078,27 +2079,47 @@ class Comics(pl.LightningModule):
             self.log(key, avg)
     
     def training_step(self, batch, batch_idx):
-        pretext_loss = self.ae_training_step(batch, batch_idx)
-        output_dict = self.ds_shared_step(batch)
-        output_dict['loss'] += self.hparams.cs_pretext_weight * pretext_loss
-        return output_dict
+        if self.hparams.current_phase == 'p1':
+            pretext_loss = self.ae_training_step(batch, batch_idx)
+            return pretext_loss
+        elif self.hparams.current_phase == 'p2':
+            output_dict = self.ds_shared_step(batch)
+            return output_dict
+        elif self.hparams.current_phase == 'p3':
+            pretext_loss = self.ae_training_step(batch, batch_idx)
+            output_dict = self.ds_shared_step(batch)
+            output_dict['loss'] += self.hparams.cs_pretext_weight * pretext_loss
+            return output_dict
     
     def training_epoch_end(self, outputs):
-        return self.ds_training_epoch_end(outputs)
+        if self.hparams.current_phase == 'p2' or self.hparams.current_phase == 'p3':
+            return self.ds_training_epoch_end(outputs)
     
     def validation_step(self, batch, batch_idx):
-        ae_output_dict = self.ae_validation_step(batch, batch_idx)
-        ds_output_dict = self.ds_validation_step(batch, batch_idx)
-        return {
-            'ae_output_dict': ae_output_dict,
-            'ds_output_dict': ds_output_dict
-        }
+        if self.hparams.current_phase == 'p1':
+            ae_output_dict = self.ae_validation_step(batch, batch_idx)
+            return ae_output_dict
+        elif self.hparams.current_phase == 'p2':
+            ds_output_dict = self.ds_shared_step(batch)
+            return ds_output_dict
+        elif self.hparams.current_phase == 'p3':
+            ae_output_dict = self.ae_validation_step(batch, batch_idx)
+            ds_output_dict = self.ds_validation_step(batch, batch_idx)
+            return {
+                'ae_output_dict': ae_output_dict,
+                'ds_output_dict': ds_output_dict
+            }
     
     def validation_epoch_end(self, outputs):
-        ae_outputs = [output['ae_output_dict'] for output in outputs]
-        ds_outputs = [output['ds_output_dict'] for output in outputs]
-        self.ae_validation_epoch_end(ae_outputs)
-        self.ds_validation_epoch_end(ds_outputs)
+        if self.hparams.current_phase == 'p1':
+            self.ae_validation_epoch_end(outputs)
+        elif self.hparams.current_phase == 'p2':
+            self.ds_validation_epoch_end(outputs)
+        elif self.hparams.current_phase == 'p3':
+            ae_outputs = [output['ae_output_dict'] for output in outputs]
+            ds_outputs = [output['ds_output_dict'] for output in outputs]
+            self.ae_validation_epoch_end(ae_outputs)
+            self.ds_validation_epoch_end(ds_outputs)
 
     def ds_shared_step(self, batch):
         if self.hparams.ds_task == 'class':

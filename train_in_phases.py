@@ -35,7 +35,7 @@ p1_model_path = model_checkpoint.best_model_path
 wandb.finish()
 
 abc_dm.phase = 'p2'
-abc_dm.setup('fit')
+# abc_dm.setup(stage='fit')
 early_stopping, model_checkpoint, csv_logger, wandb_logger = util.define_callbacks_loggers_p2(param, checkpoint_path, fold)
 if param.cs_p1_max_epochs > 0:
     model = lit_models.Comics.load_from_checkpoint(p1_model_path, current_phase='p2')
@@ -48,7 +48,7 @@ wandb.finish()
     
 abc_dm.mode = 'downstream'
 abc_dm.phase = 'p3'
-abc_dm.setup('fit')
+# abc_dm.setup(stage='fit')
 early_stopping, model_checkpoint, csv_logger, wandb_logger = util.define_callbacks_loggers_p3(param, checkpoint_path, fold)
 if param.cs_p2_max_epochs > 0:
     model = lit_models.Comics.load_from_checkpoint(p2_model_path, current_phase='p3')

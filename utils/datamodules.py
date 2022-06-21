@@ -308,7 +308,7 @@ class ABCDataModule(LightningDataModule):
         elif self.mode == 'downstream':
             if stage == "fit" or stage is None:
                 if self.use_test_as_val_for_downstream:
-                    self.trainset = ABCDataset(self.A_df, self.B_df, self.C_df, np.concatenate((train_index, self.val_index)), self.split_A, self.split_B, self.ds_tasks, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor, self.values)
+                    self.trainset = ABCDataset(self.A_df, self.B_df, self.C_df, train_index, self.split_A, self.split_B, self.ds_tasks, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor, self.values)
                     self.valset = ABCDataset(self.A_df, self.B_df, self.C_df, self.test_index, self.split_A, self.split_B, self.ds_tasks, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor, self.values)
                 else:
                     self.trainset = ABCDataset(self.A_df, self.B_df, self.C_df, train_index, self.split_A, self.split_B, self.ds_tasks, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor, self.values)
