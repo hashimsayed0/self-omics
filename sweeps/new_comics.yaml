@@ -2,7 +2,7 @@ method: grid
 metric:
   goal: maximize
   name: test_accuracy
-name: new_comics
+name: new_comics_2
 parameters:
   add_distance_loss_to_latent:
     values:
@@ -21,9 +21,6 @@ parameters:
   ae_net:
     values:
       - ae
-  ae_use_lrscheduler:
-    values:
-      - "False"
   auto_lr_find:
     value: "True"
   auto_scale_batch_size:
@@ -77,16 +74,19 @@ parameters:
   #     - "0.01"
   #     - "0.001"
   #     - "0.005"
+  cs_p1_max_epochs:
+    values: 
+      - "50"
   cs_p2_max_epochs:
     values:
-      - "0"
+      # - "0"
       - "15"
-      - "50"
+      # - "50"
   cs_pretext_weight:
     values:
-      - "0.01"
+      - "1.0"
       - "0.1"
-      - "0.001"
+      - "0.5"
   data_dir:
     values:
       - ./data/ABC_inter/Normalized
@@ -109,6 +109,7 @@ parameters:
       # - "0.2"
   ds_latent_agg_method:
     values:
+      - mean
       - sum
       # - concat
   # ds_lr:
@@ -119,7 +120,7 @@ parameters:
       - class
   exp_name:
     values:
-      - new_comics
+      - new_comics_2
   fold_idx:
     values:
       - "0"
@@ -173,7 +174,7 @@ parameters:
   p2_data_ratio:
     values:
       - "0.05"
-      - "0.1"
+      - "0.01"
   # p3_data_ratio:
   #   values:
   #     - "0.05"
@@ -196,4 +197,4 @@ parameters:
   use_test_as_val_for_downstream:
     value: "True"
   
-program: train.py
+program: train_in_phases.py
