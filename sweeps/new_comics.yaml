@@ -2,7 +2,7 @@ method: grid
 metric:
   goal: maximize
   name: test_accuracy
-name: new_comics_2
+name: new_comics_supervised
 parameters:
   add_distance_loss_to_latent:
     values:
@@ -76,7 +76,7 @@ parameters:
   #     - "0.005"
   cs_p1_max_epochs:
     values: 
-      - "50"
+      - "0"
   cs_p2_max_epochs:
     values:
       # - "0"
@@ -84,9 +84,10 @@ parameters:
       # - "50"
   cs_pretext_weight:
     values:
-      - "1.0"
-      - "0.1"
-      - "0.5"
+      # - "1.0"
+      # - "0.1"
+      # - "0.5"
+      - "0.0"
   data_dir:
     values:
       - ./data/ABC_inter/Normalized
@@ -110,7 +111,7 @@ parameters:
   ds_latent_agg_method:
     values:
       - mean
-      - sum
+      # - sum
       # - concat
   # ds_lr:
   #   values:
@@ -120,7 +121,7 @@ parameters:
       - class
   exp_name:
     values:
-      - new_comics_2
+      - new_comics_supervised
   fold_idx:
     values:
       - "0"
@@ -173,6 +174,7 @@ parameters:
   #     - "200"
   p2_data_ratio:
     values:
+      - "0.1"
       - "0.05"
       - "0.01"
   # p3_data_ratio:
