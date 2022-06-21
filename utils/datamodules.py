@@ -294,8 +294,10 @@ class ABCDataModule(LightningDataModule):
         if self.train_in_phases:
             ratio = self.data_ratios[self.phase]
             train_index = np.random.choice(self.train_index, size=int(ratio * len(self.train_index)), replace=False)
+            val_index = np.random.choice(self.val_index, size=int(ratio * len(self.val_index)), replace=False)
         else:
             train_index = self.train_index
+            val_index = self.val_index
 
         if self.mode == 'pretraining':
             if stage == "fit" or stage is None:
@@ -308,7 +310,7 @@ class ABCDataModule(LightningDataModule):
         elif self.mode == 'downstream':
             if stage == "fit" or stage is None:
                 if self.use_test_as_val_for_downstream:
-                    self.trainset = ABCDataset(self.A_df, self.B_df, self.C_df, train_index, self.split_A, self.split_B, self.ds_tasks, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor, self.values)
+                    self.trainset = ABCDataset(self.A_df, self.B_df, self.C_df, np.concatenate((train_index, val_index)), self.split_A, self.split_B, self.ds_tasks, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor, self.values)
                     self.valset = ABCDataset(self.A_df, self.B_df, self.C_df, self.test_index, self.split_A, self.split_B, self.ds_tasks, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor, self.values)
                 else:
                     self.trainset = ABCDataset(self.A_df, self.B_df, self.C_df, train_index, self.split_A, self.split_B, self.ds_tasks, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor, self.values)
@@ -325,8 +327,14 @@ class ABCDataModule(LightningDataModule):
                 elif self.prediction_data == 'test':
                     self.predset = ABCDataset(self.A_df, self.B_df, self.C_df, self.test_index, self.split_A, self.split_B, self.ds_tasks, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor, self.values)
                 elif self.prediction_data == 'all':
-                    self.predset = ABCDataset(self.A_df, self.B_df, self.C_df, np.concatenate((train_index, self.val_index, self.test_index)), self.split_A, self.split_B, self.ds_tasks, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor, self.values)
+                    self.predset = ABCDataset(self.A_df, self.B_df, self.C_df, np.concatenate((self.train_index, self.val_index, self.test_index)), self.split_A, self.split_B, self.ds_tasks, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor, self.values)
 
+    def teardown(self, stage=None):
+        self.trainset = None
+        self.valset = None
+        self.testset = None
+        self.predset = None
+    
     def train_dataloader(self):
         return DataLoader(self.trainset, batch_size=self.batch_size, num_workers=self.num_workers)
     
