@@ -53,7 +53,7 @@ early_stopping, model_checkpoint, csv_logger, wandb_logger = util.define_callbac
 if param.cs_p2_max_epochs > 0:
     model = lit_models.Comics.load_from_checkpoint(p2_model_path, current_phase='p3')
 elif param.cs_p1_max_epochs > 0:
-    model = lit_models.Comics.load_from_checkpoint(p1_model_path, current_phase='p2')
+    model = lit_models.Comics.load_from_checkpoint(p1_model_path, current_phase='p3')
 else:
     model = lit_models.Comics(current_phase='p3', **config)
 trainer = Trainer.from_argparse_args(param, callbacks=[early_stopping, model_checkpoint], logger=[csv_logger, wandb_logger])
