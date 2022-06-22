@@ -24,7 +24,6 @@ else:
     A_shape, B_shape, C_shape = util.compute_input_shapes(abc_dm)
     ae_trainer = Trainer.from_argparse_args(param, callbacks=[early_stopping, model_checkpoint], logger=[csv_logger, wandb_logger])
     ae = lit_models.AutoEncoder(A_shape, B_shape, C_shape, **vars(param))
-    abc_dm.mode = 'downstream'
     ae_trainer.fit(ae, abc_dm)
     ae_model_path = model_checkpoint.best_model_path
     # wandb.finish()
@@ -32,5 +31,6 @@ else:
 early_stopping, model_checkpoint, csv_logger = util.define_callbacks_loggers_downstream(param, checkpoint_path, fold)
 classifier = lit_models.DownstreamModel(ae_model_path, abc_dm.class_weights, **vars(param))
 classifier_trainer = Trainer.from_argparse_args(param, callbacks=[early_stopping, model_checkpoint], logger=[csv_logger, wandb_logger])
+abc_dm.mode = 'downstream'
 classifier_trainer.fit(classifier, abc_dm)
 classifier_trainer.test(datamodule=abc_dm, ckpt_path='best')
