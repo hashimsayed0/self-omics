@@ -2100,7 +2100,7 @@ class Comics(pl.LightningModule):
             ae_output_dict = self.ae_validation_step(batch, batch_idx)
             return ae_output_dict
         elif self.hparams.current_phase == 'p2':
-            ds_output_dict = self.ds_shared_step(batch)
+            ds_output_dict = self.ds_validation_step(batch, batch_idx)
             return ds_output_dict
         elif self.hparams.current_phase == 'p3':
             ae_output_dict = self.ae_validation_step(batch, batch_idx)
@@ -2299,8 +2299,9 @@ class Comics(pl.LightningModule):
             avg_loss = torch.stack([x["loss"] for x in outputs]).mean()
             self.log("{}_down_loss".format(self.mode), avg_loss)
         
-        total_loss = torch.stack([x["loss"] for x in outputs]).mean()
-        self.log("{}_total_loss".format(self.mode), total_loss)
+        if self.hparams.current_phase == 'p3':
+            total_loss = torch.stack([x["loss"] for x in outputs]).mean()
+            self.log("{}_total_loss".format(self.mode), total_loss)
 
     def ds_training_epoch_end(self, outputs):
         if self.hparams.ds_save_latent_training:

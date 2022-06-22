@@ -138,19 +138,23 @@ def define_callbacks_loggers_p1(param, checkpoint_path, count):
 
 def define_callbacks_loggers_p2(param, checkpoint_path, count):
     early_stopping_key = 'val_{}_loss'.format(param.ds_task)
-    if param.ds_task == 'class':
-        callback_key = 'val_{}'.format(param.ds_class_callback_key)
-    elif param.ds_task == 'surv':
-        callback_key = 'val_{}'.format(param.ds_surv_callback_key)
-    elif param.ds_task == 'reg':
-        callback_key = 'val_{}'.format(param.ds_reg_callback_key)
-    elif param.ds_task == 'multi':
+    callback_key = 'val_{}_loss'.format(param.ds_task)
+    # if param.ds_task == 'class':
+    #     callback_key = 'val_{}'.format(param.ds_class_callback_key)
+    # elif param.ds_task == 'surv':
+    #     callback_key = 'val_{}'.format(param.ds_surv_callback_key)
+    # elif param.ds_task == 'reg':
+    #     callback_key = 'val_{}'.format(param.ds_reg_callback_key)
+    # elif param.ds_task == 'multi':
+    #     callback_key = 'val_down_loss'
+    #     early_stopping_key = 'val_down_loss'
+    if param.ds_task == 'multi':
         callback_key = 'val_down_loss'
         early_stopping_key = 'val_down_loss'
     param.max_epochs = param.cs_p2_max_epochs
     csv_logger = pl_loggers.CSVLogger(checkpoint_path, name='p2')
     early_stopping = EarlyStopping(early_stopping_key, patience=param.cs_p2_patience, verbose=True)
-    model_checkpoint = ModelCheckpoint(csv_logger.log_dir, monitor=callback_key, mode='max', save_top_k=1)
+    model_checkpoint = ModelCheckpoint(csv_logger.log_dir, monitor=callback_key, mode='min', save_top_k=1)
     wandb_logger = pl_loggers.WandbLogger(project = 'tcga_contrastive', group = '{}-p2'.format(param.exp_name), name = 'fold-{f}-p2-v{v}'.format(f=count, v=csv_logger.version), offline=False)
     return early_stopping, model_checkpoint, csv_logger, wandb_logger
 
