@@ -11,7 +11,7 @@ import torch.optim as optim
 from torch.optim import lr_scheduler
 import torch.nn.functional as F
 from .networks import SimCLRProjectionHead, CLIPProjectionHead, AESepB, AESepA, AESepAB, ClassifierNet, VAESepB, VAESepAB, SurvivalNet, RegressionNet
-from .losses import SimCLR_Loss, weighted_binary_cross_entropy, CLIPLoss, BarlowTwinsLoss, MTLR_survival_loss, NTXentLoss, SimSiamLoss
+from .losses import SimCLR_Loss, weighted_binary_cross_entropy, CLIPLoss, BarlowTwinsLoss, MTLR_survival_loss, NTXentLoss, SimSiamLoss, mmd_rbf
 from .optimizers import LARS
 from torchmetrics.functional import f1_score, auroc, precision, recall, accuracy
 from sklearn.metrics import precision_score, recall_score, f1_score
@@ -1588,6 +1588,10 @@ class Comics(pl.LightningModule):
                                 help='if True, latent vectors from A, B and C are concatenated before being fed into the decoder')
         parser.add_argument('--use_rep_trick', default=False, type=lambda x: (str(x).lower() == 'true'),
                                 help='use reparameterization in trick in ae')
+        parser.add_argument('--add_MMD_loss', default=False, type=lambda x: (str(x).lower() == 'true'),
+                                help='add MMD loss')
+        parser.add_argument('--MMD_loss_weight', type=float, default=0.5,
+                                help='weight of MMD loss')
         ################################################################################################################
         parser.add_argument("--ds_drop_p", type=float, default=0.2)
         parser.add_argument("--num_classes", type=int, default=34)
@@ -2003,6 +2007,15 @@ class Comics(pl.LightningModule):
         cons_loss += self.cons_loss(h_C_recon_using_dec_B, h_B)
         return logs, cons_loss
     
+    def MMD_step(self, h):
+        logs = {}
+        h_A, h_B, h_C = h
+        MMD_loss = 0
+        MMD_loss += mmd_rbf(h_A, h_B)
+        MMD_loss += mmd_rbf(h_B, h_C)
+        MMD_loss += mmd_rbf(h_C, h_A)
+        return logs, MMD_loss
+
     def ae_training_step(self, batch, batch_idx):
         if self.hparams.ae_net == 'ae':
             logs, h, pretext_loss = self.ae_step(batch) 
@@ -2018,6 +2031,10 @@ class Comics(pl.LightningModule):
             logs, cons_loss = self.cons_step(h)
             pretext_loss += cons_loss * self.hparams.consistency_loss_weight
             self.log('{}_cons_loss'.format(self.mode), cons_loss, on_step=False, on_epoch=True)
+        if self.hparams.add_MMD_loss:
+            logs, MMD_loss = self.MMD_step(h)
+            pretext_loss += MMD_loss * self.hparams.MMD_loss_weight
+            self.log('{}_MMD_loss'.format(self.mode), MMD_loss, on_step=False, on_epoch=True)
         if self.hparams.cont_align_loss_criterion != "none":
             if self.hparams.cont_align_loss_criterion in ['barlowtwins', 'clip'] or h[0].shape[0] == self.hparams.batch_size:
                 self.cont_pair = 'align'
@@ -2054,6 +2071,10 @@ class Comics(pl.LightningModule):
             _, cons_loss = self.cons_step(h)
             pretext_loss += cons_loss * self.hparams.consistency_loss_weight
             logs['{}_cons_loss'.format(self.mode)] = cons_loss
+        if self.hparams.add_MMD_loss:
+            _, MMD_loss = self.MMD_step(h)
+            pretext_loss += MMD_loss * self.hparams.MMD_loss_weight
+            logs['{}_MMD_loss'.format(self.mode)] = MMD_loss
         if self.hparams.cont_align_loss_criterion != "none":
             cont_logs = {}
             if self.hparams.cont_align_loss_criterion in ['barlowtwins', 'clip'] or h[0].shape[0] == self.hparams.batch_size:
