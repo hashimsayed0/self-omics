@@ -1592,6 +1592,10 @@ class Comics(pl.LightningModule):
                                 help='add MMD loss')
         parser.add_argument('--MMD_loss_weight', type=float, default=0.5,
                                 help='weight of MMD loss')
+        parser.add_argument('--add_latent_reconstruction_loss', default=False, type=lambda x: (str(x).lower() == 'true'),
+                                help='add latent reconstruction loss')
+        parser.add_argument('--latent_reconstruction_loss_weight', type=float, default=0.5, 
+                                help='weight of latent reconstruction loss')
         ################################################################################################################
         parser.add_argument("--ds_drop_p", type=float, default=0.2)
         parser.add_argument("--num_classes", type=int, default=34)
@@ -2015,6 +2019,19 @@ class Comics(pl.LightningModule):
         MMD_loss += mmd_rbf(h_B, h_C)
         MMD_loss += mmd_rbf(h_C, h_A)
         return logs, MMD_loss
+    
+    def latent_recon_step(self, h):
+        logs = {}
+        h_A, h_B, h_C = h
+        latent_recon_loss = 0
+        if self.hparams.recon_all_thrice:
+            recon_list = self.ae.decode((h_A, h_B, h_C))
+            x_recon = (recon_list[0][0], recon_list[1][1], recon_list[2][2])
+            h_A_recon, h_B_recon, h_C_recon = self.ae.encode(x_recon)
+        latent_recon_loss += F.mse_loss(h_A, h_A_recon)
+        latent_recon_loss += F.mse_loss(h_B, h_B_recon)
+        latent_recon_loss += F.mse_loss(h_C, h_C_recon)
+        return logs, latent_recon_loss
 
     def ae_training_step(self, batch, batch_idx):
         if self.hparams.ae_net == 'ae':
@@ -2035,6 +2052,10 @@ class Comics(pl.LightningModule):
             logs, MMD_loss = self.MMD_step(h)
             pretext_loss += MMD_loss * self.hparams.MMD_loss_weight
             self.log('{}_MMD_loss'.format(self.mode), MMD_loss, on_step=False, on_epoch=True)
+        if self.hparams.add_latent_reconstruction_loss:
+            logs, latent_recon_loss = self.latent_recon_step(h)
+            pretext_loss += latent_recon_loss * self.hparams.latent_reconstruction_loss_weight
+            self.log('{}_latent_recon_loss'.format(self.mode), latent_recon_loss, on_step=False, on_epoch=True)
         if self.hparams.cont_align_loss_criterion != "none":
             if self.hparams.cont_align_loss_criterion in ['barlowtwins', 'clip'] or h[0].shape[0] == self.hparams.batch_size:
                 self.cont_pair = 'align'
@@ -2075,6 +2096,10 @@ class Comics(pl.LightningModule):
             _, MMD_loss = self.MMD_step(h)
             pretext_loss += MMD_loss * self.hparams.MMD_loss_weight
             logs['{}_MMD_loss'.format(self.mode)] = MMD_loss
+        if self.hparams.add_latent_reconstruction_loss:
+            _, latent_recon_loss = self.latent_recon_step(h)
+            pretext_loss += latent_recon_loss * self.hparams.latent_reconstruction_loss_weight
+            logs['{}_latent_recon_loss'.format(self.mode)] = latent_recon_loss
         if self.hparams.cont_align_loss_criterion != "none":
             cont_logs = {}
             if self.hparams.cont_align_loss_criterion in ['barlowtwins', 'clip'] or h[0].shape[0] == self.hparams.batch_size:

@@ -2,22 +2,21 @@ method: grid
 metric:
   goal: maximize
   name: test_accuracy
-name: mmd_loss
+name: lat_recon_loss
 parameters:
   add_distance_loss_to_latent:
     values:
       # - "False"
       - "True"
-  add_MMD_loss:
+  add_latent_reconstruction_loss:
     values:
       # - "False"
       - "True"
-  MMD_loss_weight:
+  latent_reconstruction_loss_weight:
     values:
-      - "0.1"
-      - "0.3"
-      - "0.5"
       - "1.0"
+      - "10.0"
+      - "5.0"
   # add_distance_loss_to_proj:
   #   values:
   #     - "True"
@@ -132,7 +131,7 @@ parameters:
       - class
   exp_name:
     values:
-      - mmd_loss
+      - lat_recon_loss
   fold_idx:
     values:
       - "0"

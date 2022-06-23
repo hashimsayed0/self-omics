@@ -165,8 +165,10 @@
 
                 // "--add_consistency_loss", "True",
                 // "--consistency_loss_weight", "10.0",
-                "--add_MMD_loss", "True",
-                "--MMD_loss_weight", "0.1",
+                // "--add_MMD_loss", "True",
+                // "--MMD_loss_weight", "0.1",
+                "--add_latent_reconstruction_loss", "True",
+                "--latent_reconstruction_loss_weight", "0.1",
 
                 // "--use_one_encoder", "True",
                 // "--use_one_decoder", "True",
