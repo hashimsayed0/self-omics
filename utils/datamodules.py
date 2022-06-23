@@ -1,4 +1,5 @@
 from email.policy import default
+from random import seed
 from aiohttp import worker
 from pytorch_lightning import LightningDataModule
 import os
@@ -293,7 +294,9 @@ class ABCDataModule(LightningDataModule):
     def setup(self, stage = None):
         if self.train_in_phases:
             ratio = self.data_ratios[self.phase]
+            np.random.seed(self.seed)
             train_index = np.random.choice(self.train_index, size=int(ratio * len(self.train_index)), replace=False)
+            np.random.seed(self.seed)
             val_index = np.random.choice(self.val_index, size=int(ratio * len(self.val_index)), replace=False)
         else:
             train_index = self.train_index

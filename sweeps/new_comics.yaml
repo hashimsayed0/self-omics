@@ -2,7 +2,7 @@ method: grid
 metric:
   goal: maximize
   name: test_accuracy
-name: new_comics_ssl
+name: new_comics_ssl_2
 parameters:
   add_distance_loss_to_latent:
     values:
@@ -122,7 +122,7 @@ parameters:
       - class
   exp_name:
     values:
-      - new_comics_ssl
+      - new_comics_ssl_2
   fold_idx:
     values:
       - "0"
