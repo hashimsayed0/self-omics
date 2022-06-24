@@ -292,8 +292,8 @@ class ABCDataModule(LightningDataModule):
         return class_weights
 
     def setup(self, stage = None):
-        if self.train_in_phases:
-            ratio = self.data_ratios[self.phase]
+        ratio = self.data_ratios[self.phase]
+        if self.train_in_phases and ratio != 1:
             np.random.seed(self.seed)
             train_index = np.random.choice(self.train_index, size=int(ratio * len(self.train_index)), replace=False)
             np.random.seed(self.seed)

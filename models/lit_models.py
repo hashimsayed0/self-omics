@@ -161,7 +161,7 @@ class AutoEncoder(pl.LightningModule):
             self.masked_chr_prediction_weight = config['masked_chr_prediction_weight']
             self.mask_pred_net = ClassifierNet(num_mask_total, latent_size * 3, dropout_p=ae_drop_p)
             self.mask_pred_criterion = nn.CrossEntropyLoss()
-
+        
         self.save_hyperparameters()
 
     @staticmethod
@@ -246,6 +246,14 @@ class AutoEncoder(pl.LightningModule):
                                 help='use reparameterization in trick in ae')
         parser.add_argument('--pretraining_max_epochs', type=int, default=50, help='maximum number of epochs for pretraining')
         parser.add_argument('--pretraining_patience', type=int, default=35, help='patience for pretraining')
+        parser.add_argument('--add_MMD_loss', default=False, type=lambda x: (str(x).lower() == 'true'),
+                                help='add MMD loss')
+        parser.add_argument('--MMD_loss_weight', type=float, default=0.5,
+                                help='weight of MMD loss')
+        parser.add_argument('--add_latent_reconstruction_loss', default=False, type=lambda x: (str(x).lower() == 'true'),
+                                help='add latent reconstruction loss')
+        parser.add_argument('--latent_reconstruction_loss_weight', type=float, default=0.5, 
+                                help='weight of latent reconstruction loss')
         return parent_parser
 
     def forward(self, x):
@@ -512,6 +520,28 @@ class AutoEncoder(pl.LightningModule):
             self.log('{}_dist_loss_btw_proj'.format(self.mode), dist_loss, on_step=False, on_epoch=True)
         return logs, cont_loss
     
+    def MMD_step(self, h):
+        logs = {}
+        h_A, h_B, h_C = h
+        MMD_loss = 0
+        MMD_loss += mmd_rbf(h_A, h_B)
+        MMD_loss += mmd_rbf(h_B, h_C)
+        MMD_loss += mmd_rbf(h_C, h_A)
+        return logs, MMD_loss
+    
+    def latent_recon_step(self, h):
+        logs = {}
+        h_A, h_B, h_C = h
+        latent_recon_loss = 0
+        if self.hparams.recon_all_thrice:
+            recon_list = self.ae.decode((h_A, h_B, h_C))
+            x_recon = (recon_list[0][0], recon_list[1][1], recon_list[2][2])
+            h_A_recon, h_B_recon, h_C_recon = self.ae.encode(x_recon)
+        latent_recon_loss += F.mse_loss(h_A, h_A_recon)
+        latent_recon_loss += F.mse_loss(h_B, h_B_recon)
+        latent_recon_loss += F.mse_loss(h_C, h_C_recon)
+        return logs, latent_recon_loss
+    
     def cont_noise_step(self, h_masked, h_unmasked, omics_type='A'):
         logs = {}
         if self.cont_noise_loss_criterion == "clip":
@@ -571,6 +601,14 @@ class AutoEncoder(pl.LightningModule):
             logs, cons_loss = self.cons_step(h)
             pretext_loss += cons_loss * self.consistency_loss_weight
             self.log('{}_cons_loss'.format(self.mode), cons_loss, on_step=False, on_epoch=True)
+        if self.hparams.add_MMD_loss:
+            logs, MMD_loss = self.MMD_step(h)
+            pretext_loss += MMD_loss * self.hparams.MMD_loss_weight
+            self.log('{}_MMD_loss'.format(self.mode), MMD_loss, on_step=False, on_epoch=True)
+        if self.hparams.add_latent_reconstruction_loss:
+            logs, latent_recon_loss = self.latent_recon_step(h)
+            pretext_loss += latent_recon_loss * self.hparams.latent_reconstruction_loss_weight
+            self.log('{}_latent_recon_loss'.format(self.mode), latent_recon_loss, on_step=False, on_epoch=True)
         if self.cont_align_loss_criterion != "none":
             if self.cont_align_loss_criterion in ['barlowtwins', 'clip'] or h[0].shape[0] == self.batch_size:
                 self.cont_pair = 'align'
@@ -608,6 +646,14 @@ class AutoEncoder(pl.LightningModule):
             _, cons_loss = self.cons_step(h)
             pretext_loss += cons_loss * self.consistency_loss_weight
             logs['{}_cons_loss'.format(self.mode)] = cons_loss
+        if self.hparams.add_MMD_loss:
+            _, MMD_loss = self.MMD_step(h)
+            pretext_loss += MMD_loss * self.hparams.MMD_loss_weight
+            logs['{}_MMD_loss'.format(self.mode)] = MMD_loss
+        if self.hparams.add_latent_reconstruction_loss:
+            _, latent_recon_loss = self.latent_recon_step(h)
+            pretext_loss += latent_recon_loss * self.hparams.latent_reconstruction_loss_weight
+            logs['{}_latent_recon_loss'.format(self.mode)] = latent_recon_loss
         if self.cont_align_loss_criterion != "none":
             cont_logs = {}
             if self.cont_align_loss_criterion in ['barlowtwins', 'clip'] or h[0].shape[0] == self.batch_size:
@@ -635,9 +681,9 @@ class AutoEncoder(pl.LightningModule):
 
 
 class DownstreamModel(pl.LightningModule):
-    def __init__(self, **config):
+    def __init__(self, ae_model_path, class_weights, **config):
         super(DownstreamModel, self).__init__()
-        self.ae_model_path = config['ae_model_path']
+        self.ae_model_path = ae_model_path
         self.ds_input_size = config['latent_size']
         self.ds_drop_p = config['ds_drop_p']
         self.num_classes = config['num_classes']
@@ -647,7 +693,7 @@ class DownstreamModel(pl.LightningModule):
         self.ds_lr_policy = config['ds_lr_policy']
         self.ds_epoch_num_decay = config['ds_epoch_num_decay']
         self.ds_decay_step_size = config['ds_decay_step_size']
-        self.class_weights = config['class_weights']
+        self.class_weights = class_weights
         self.ae_net = config['ae_net']
         self.ds_max_epochs = config['downstream_max_epochs']
         self.ds_task = config['ds_task']

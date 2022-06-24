@@ -2,7 +2,7 @@ method: grid
 metric:
   goal: maximize
   name: test_accuracy
-name: recon_all_one_enc_dec
+name: old_mmd_loss
 parameters:
   add_distance_loss_to_latent:
     values:
@@ -11,6 +11,14 @@ parameters:
   # add_distance_loss_to_proj:
   #   values:
   #     - "True"
+  add_MMD_loss:
+    values:
+      - "True"
+  MMD_loss_weight:
+    values:
+      - "0.3"
+      - "0.1"
+      - "0.0"
   ae_dim_1A:
     values:
       - "128"
@@ -97,7 +105,7 @@ parameters:
       - class
   exp_name:
     values:
-      - recon_all_one_enc_dec
+      - old_mmd_loss
   fold_idx:
     values:
       - "0"
@@ -130,8 +138,8 @@ parameters:
     values:
       # - "15"
       # - "25"
-      - "100"
-  #     - "50"
+      # - "100"
+      - "50"
   #     - "200"
   recon_all_thrice:
     value: "True"
@@ -146,14 +154,14 @@ parameters:
   split_B:
     values:
       - "True"
-  use_one_encoder:
-    values: 
-      - "True"
-      - "False"
-  use_one_decoder:
-    values: 
-      - "True"
-      - "False"
+  # use_one_encoder:
+  #   values: 
+  #     - "True"
+  #     - "False"
+  # use_one_decoder:
+  #   values: 
+  #     - "True"
+      # - "False"
   use_sample_list:
     value: "True"
   use_test_as_val_for_downstream:
