@@ -2,7 +2,7 @@ method: grid
 metric:
   goal: maximize
   name: test_accuracy
-name: old_mmd_loss
+name: old_tune
 parameters:
   add_distance_loss_to_latent:
     values:
@@ -11,14 +11,14 @@ parameters:
   # add_distance_loss_to_proj:
   #   values:
   #     - "True"
-  add_MMD_loss:
-    values:
-      - "True"
-  MMD_loss_weight:
-    values:
-      - "0.3"
-      - "0.1"
-      - "0.0"
+  # add_MMD_loss:
+  #   values:
+  #     - "True"
+  # MMD_loss_weight:
+  #   values:
+  #     - "0.3"
+  #     - "0.1"
+  #     - "0.0"
   ae_dim_1A:
     values:
       - "128"
@@ -48,26 +48,36 @@ parameters:
     values:
       - "True"
       # - "False"
+  choose_masking_method_every_epoch:
+    values:
+      - "True"
+      - "False"
   cl_loss:
     values:
       - bce
   # concat_latent_for_decoder:
   #   values:
   #     - "True"
-  cont_loss:
-    values:
-      - patient
-  cont_loss_criterion:
+  cont_align_loss_criterion:
     values:
       - barlowtwins
       # - clip
+  cont_noise_loss_criterion:
+    values:
+      # - barlowtwins
+      # - clip
+      - "none"
   cont_loss_temp:
     values:
       - "0.1"
-  cont_loss_weight:
+  cont_align_loss_weight:
     values:
       # - "0.5"
       - "1.0"
+  cont_align_loss_latent:
+    values:
+      # - "unmasked"
+      - "masked"
   # cont_loss_lambda:
   #   values:
   #     - "0.01"
@@ -96,7 +106,7 @@ parameters:
   ds_latent_agg_method:
     values:
       - sum
-      # - concat
+      - concat
   # ds_lr:
   #   values:
   #     - "0.001"
@@ -105,7 +115,7 @@ parameters:
       - class
   exp_name:
     values:
-      - old_mmd_loss
+      - old_tune
   fold_idx:
     values:
       - "0"
@@ -119,6 +129,8 @@ parameters:
   latent_size:
     values:
       - "512"
+      - "1024"
+      - "2048"
   mask_A:
     values:
       - "True"

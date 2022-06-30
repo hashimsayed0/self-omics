@@ -48,8 +48,8 @@
                 "--ae_net", "ae",
                 "--pretraining_patience", "35",
                 "--downstream_patience", "35",
-                "--pretraining_max_epochs", "1",
-                "--downstream_max_epochs", "1",
+                "--pretraining_max_epochs", "50",
+                "--downstream_max_epochs", "150",
                 "--ae_lr", "0.001",
                 
                 "--ds_latent_agg_method", "sum",
@@ -76,8 +76,8 @@
 
                 // "--add_consistency_loss", "True",
                 // "--consistency_loss_weight", "10.0",
-                "--add_MMD_loss", "True",
-                "--MMD_loss_weight", "0.3",
+                // "--add_MMD_loss", "True",
+                // "--MMD_loss_weight", "0.3",
                 // "--add_latent_reconstruction_loss", "True",
                 // "--latent_reconstruction_loss_weight", "0.1",
 
