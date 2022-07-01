@@ -2,21 +2,12 @@ method: grid
 metric:
   goal: maximize
   name: test_accuracy
-name: lat_recon_loss
+name: new_comics_k_fold
 parameters:
   add_distance_loss_to_latent:
     values:
       # - "False"
       - "True"
-  add_latent_reconstruction_loss:
-    values:
-      # - "False"
-      - "True"
-  latent_reconstruction_loss_weight:
-    values:
-      - "1.0"
-      - "10.0"
-      - "5.0"
   # add_distance_loss_to_proj:
   #   values:
   #     - "True"
@@ -27,6 +18,10 @@ parameters:
     values:
       - "0.0"
       # - "0.2"
+  ae_lr:
+    values:
+      - "0.001"
+      # - "0.0001"
   ae_net:
     values:
       - ae
@@ -54,13 +49,13 @@ parameters:
   #     - "True"
   cont_align_loss_criterion:
     values:
-      - barlowtwins
-      # - clip
+      # - barlowtwins
+      - clip
   cont_noise_loss_criterion:
     values:
       # - barlowtwins
-      # - clip
-      - "none"
+      - clip
+      # - "none"
   cont_loss_temp:
     values:
       - "0.1"
@@ -71,8 +66,8 @@ parameters:
       # - "1.0"
   cont_align_loss_weight:
     values:
-      # - "0.5"
-      - "1.0"
+      - "0.5"
+      # - "1.0"
   cont_align_loss_latent:
     values:
       # - "unmasked"
@@ -89,15 +84,15 @@ parameters:
       # - "0"
   cs_p2_max_epochs:
     values:
-      - "0"
-      # - "15"
+      # - "0"
+      - "15"
       # - "50"
   cs_pretext_weight:
     values:
       # - "1.0"
-      # - "0.1"
+      - "0.1"
       # - "0.5"
-      - "0.0"
+      # - "0.0"
   data_dir:
     values:
       - ./data/ABC_inter/Normalized
@@ -131,14 +126,14 @@ parameters:
       - class
   exp_name:
     values:
-      - lat_recon_loss
+      - new_comics_k_fold
   fold_idx:
     values:
       - "0"
-      # - "1"
-      # - "2"
-      # - "3"
-      # - "4"
+      - "1"
+      - "2"
+      - "3"
+      - "4"
   gpus:
     values:
       - "-1"
@@ -150,8 +145,8 @@ parameters:
       - "True"
   masking_method:
     values:
-      - gaussian_noise
-      # - zero
+      # - gaussian_noise
+      - zero
       # - swap_noise
   num_mask_A:
     values:
@@ -174,7 +169,7 @@ parameters:
     values:
       - "0.75"
   num_workers:
-    value: "2"
+    value: "3"
   # pretraining_max_epochs:
   #   values:
   #     # - "15"
@@ -193,11 +188,11 @@ parameters:
   #     - "0.1"
   recon_all_thrice:
     value: "True"
-  # seed:
-  #   values:
-  #     - "42"
-  #     - "14"
-  #     - "7"
+  seed:
+    values:
+      - "42"
+      # - "14"
+      # - "7"
       # - "10"
   split_A:
     value: "True"
