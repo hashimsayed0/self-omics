@@ -10,37 +10,26 @@ from pytorch_lightning import Trainer
 import matplotlib.pyplot as plt
 import torch
 
-param = util.parse_arguments()
+param = util.parse_arguments(run_in_phases=True)
 util.set_seeds(param.seed)
-
+param.train_in_phases = True 
 fold = 0
 dict_args = vars(param)
 abc_dm = datamodules.ABCDataModule(fold, **dict_args)
 abc_dm.mode = 'downstream'
-# checkpoint_path = os.path.join(param.checkpoints_dir, param.exp_name, 'fold-{}'.format(fold))
-# early_stopping, model_checkpoint, wandb_logger, csv_logger = util.define_callbacks_loggers_pretraining(param, checkpoint_path, fold)
-# early_stopping, model_checkpoint, csv_logger = util.define_callbacks_loggers_downstream(param, checkpoint_path, fold)
-# if param.load_pretrained_ds:
-#     classifier = lit_models.DownstreamModel.load_from_checkpoint(param.pretrained_ds_path, param.pretrained_ae_path, abc_dm.class_weights)
-# else:
-#     classifier = lit_models.DownstreamModel(param.pretrained_ae_path, abc_dm.class_weights, **vars(param))
-classifier = lit_models.DownstreamModel(param.pretrained_ae_path, abc_dm.class_weights, **vars(param))
-latent_save_path = os.path.join(os.path.dirname(param.pretrained_ae_path), 'latents')
-# if param.ds_save_latent_dataset:
-#     classifier.feature_extractor.freeze()
-#     for p in classifier.class_net.parameters():
-#         p.requires_grad = False
-#     param.max_epochs = 1
-classifier_trainer = Trainer.from_argparse_args(param, resume_from_checkpoint=param.pretrained_ds_path)
+abc_dm.phase = 'p2'
+model = lit_models.Comics.load_from_checkpoint(param.model_path)
+latent_save_path = os.path.join(os.path.dirname(param.model_path), 'latents')
+trainer = Trainer.from_argparse_args(param)
 
 if param.ds_save_latent_dataset:
     if param.prediction_data == 'all':
         for pred_data in ['train', 'val', 'test']:
             abc_dm.prediction_data = pred_data
-            outputs = classifier_trainer.predict(classifier, datamodule=abc_dm)
+            outputs = trainer.predict(model, datamodule=abc_dm)
             util.save_latents(outputs, pred_data, latent_save_path)
     else:
-        outputs = classifier_trainer.predict(classifier, datamodule=abc_dm)
+        outputs = trainer.predict(model, datamodule=abc_dm)
         util.save_latents(outputs, param.prediction_data, latent_save_path)
 
 if param.plot_confusion_matrix:

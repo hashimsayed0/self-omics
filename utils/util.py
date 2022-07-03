@@ -1,4 +1,5 @@
 import argparse
+import pandas as pd
 from pytorch_lightning import Trainer, seed_everything
 import torch
 import numpy as np
@@ -8,7 +9,7 @@ from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
 import os
 from .datamodules import ABCDataModule
 
-def parse_arguments(train_in_phases=False):
+def parse_arguments(run_in_phases=False):
     parser = argparse.ArgumentParser(description='Runs the specified command')
 
     # general arguments
@@ -32,7 +33,7 @@ def parse_arguments(train_in_phases=False):
     
     parser = ABCDataModule.add_data_module_args(parser)
     
-    if train_in_phases:
+    if run_in_phases:
         parser = Comics.add_model_specific_args(parser)
     else:
         parser = AutoEncoder.add_model_specific_args(parser)
@@ -82,6 +83,7 @@ def define_callbacks_loggers_pretraining(param, checkpoint_path, count):
         callback_key = 'val_pretext_loss'
     
     param.max_epochs = param.pretraining_max_epochs
+    param.min_epochs = 0
     csv_logger = pl_loggers.CSVLogger(checkpoint_path, name='pretraining')
     early_stopping = EarlyStopping(callback_key, patience=param.pretraining_patience)
     model_checkpoint = ModelCheckpoint(csv_logger.log_dir, monitor=callback_key, mode='min', save_top_k=1)
@@ -101,6 +103,7 @@ def define_callbacks_loggers_downstream(param, checkpoint_path, count):
         callback_key = 'val_down_loss'
         early_stopping_key = 'val_down_loss'
     param.max_epochs = param.downstream_max_epochs
+    param.min_epochs = 0
     csv_logger = pl_loggers.CSVLogger(checkpoint_path, name='downstream')
     early_stopping = EarlyStopping(early_stopping_key, patience=param.downstream_patience)
     model_checkpoint = ModelCheckpoint(csv_logger.log_dir, monitor=callback_key, mode='max', save_top_k=1)
@@ -174,3 +177,14 @@ def define_callbacks_loggers_p3(param, checkpoint_path, count):
     model_checkpoint = ModelCheckpoint(csv_logger.log_dir, monitor=callback_key, mode='max', save_top_k=1)
     wandb_logger = pl_loggers.WandbLogger(project = 'tcga_contrastive', group = '{}-p3'.format(param.exp_name), name = 'fold-{f}-p3-v{v}'.format(f=count, v=csv_logger.version), offline=False)
     return early_stopping, model_checkpoint, csv_logger, wandb_logger
+
+def save_latents(outputs, pred_data, latent_dir):
+    sample_ids_list = []
+    for x in outputs:
+        sample_ids_list.extend(x["sample_ids"])
+    h_concat = torch.cat([x["h"] for x in outputs]).cpu().numpy()
+    latent_space = pd.DataFrame(h_concat, index=sample_ids_list)
+    # check if dir exists, else create
+    if not os.path.exists(latent_dir):
+        os.makedirs(latent_dir)
+    latent_space.to_csv(os.path.join(latent_dir, '{}_latent_space.tsv'.format(pred_data)), sep='\t')

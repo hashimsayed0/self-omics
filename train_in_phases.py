@@ -10,7 +10,7 @@ from pytorch_lightning import Trainer
 import matplotlib.pyplot as plt
 
 
-param = util.parse_arguments(train_in_phases=True)
+param = util.parse_arguments(run_in_phases=True)
 util.set_seeds(param.seed)   
 param.train_in_phases = True 
 config = vars(param)
@@ -60,7 +60,8 @@ else:
     model = lit_models.Comics(current_phase='p3', **config)
 trainer = Trainer.from_argparse_args(param, callbacks=[early_stopping, model_checkpoint], logger=[csv_logger, wandb_logger])
 trainer.fit(model, abc_dm)
-trainer.test(datamodule=abc_dm, ckpt_path='best')
+if param.cs_p3_max_epochs > 0:
+    trainer.test(datamodule=abc_dm, ckpt_path='best')
 
 
 

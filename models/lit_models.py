@@ -681,7 +681,7 @@ class AutoEncoder(pl.LightningModule):
 
 
 class DownstreamModel(pl.LightningModule):
-    def __init__(self, ae_model_path, class_weights, **config):
+    def __init__(self, ae_model_path, A_shape, B_shape, C_shape, class_weights, **config):
         super(DownstreamModel, self).__init__()
         self.ae_model_path = ae_model_path
         self.ds_input_size = config['latent_size']
@@ -709,7 +709,10 @@ class DownstreamModel(pl.LightningModule):
         self.ds_mask_A = config['ds_mask_A']
         self.ds_mask_B = config['ds_mask_B']
         self.ds_masking_method = config['ds_masking_method']
-        self.ae_model = AutoEncoder.load_from_checkpoint(self.ae_model_path)
+        if self.ae_model_path is None:
+            self.ae_model = AutoEncoder(A_shape, B_shape, C_shape, **config)
+        else:
+            self.ae_model = AutoEncoder.load_from_checkpoint(self.ae_model_path)
         self.ae_model.freeze()
         self.ds_latent_agg_method = config['ds_latent_agg_method']
         self.ds_add_omics_identity = config['ds_add_omics_identity']
@@ -1660,6 +1663,8 @@ class Comics(pl.LightningModule):
                                 help='whether to save the latent representations of testing data')
         parser.add_argument('--ds_save_latent_training', default=False, type=lambda x: (str(x).lower() == 'true'),
                                 help='whether to save the latent representations of training data')
+        parser.add_argument('--ds_save_latent_val', default=False, type=lambda x: (str(x).lower() == 'true'),
+                                help='whether to save the latent representations of validation data')
         parser.add_argument('--ds_save_latent_dataset', default=False, type=lambda x: (str(x).lower() == 'true'),
                                 help='whether to save the latent representations of the whole dataset')
         parser.add_argument('--ds_mask_A', default=False, type=lambda x: (str(x).lower() == 'true'),
@@ -2207,11 +2212,15 @@ class Comics(pl.LightningModule):
             self.ae_validation_epoch_end(outputs)
         elif self.hparams.current_phase == 'p2':
             self.ds_validation_epoch_end(outputs)
+            if self.hparams.ds_save_latent_val:
+                self.save_latent(outputs, 'val')
         elif self.hparams.current_phase == 'p3':
             ae_outputs = [output['ae_output_dict'] for output in outputs]
             ds_outputs = [output['ds_output_dict'] for output in outputs]
             self.ae_validation_epoch_end(ae_outputs)
             self.ds_validation_epoch_end(ds_outputs)
+            if self.hparams.ds_save_latent_val:
+                self.save_latent(ds_outputs, 'val')
 
     def ds_shared_step(self, batch):
         if self.hparams.ds_task == 'class':
