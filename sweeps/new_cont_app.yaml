@@ -2,7 +2,7 @@ method: grid
 metric:
   goal: maximize
   name: test_accuracy
-name: new_cont_k_fold
+name: new_cont_data_ratio
 parameters:
   add_distance_loss_to_latent:
     values:
@@ -96,6 +96,12 @@ parameters:
   # downstream_max_epochs:
   #   values:
   #     - "200"
+  downstream_data_ratio:
+    values:
+      - "0.01"
+      - "0.05"
+      - "0.1"
+      - "1.0"
   ds_drop_p:
     values:
       - "0.0"
@@ -112,14 +118,14 @@ parameters:
       - class
   exp_name:
     values:
-      - new_cont_k_fold
+      - new_cont_data_ratio
   fold_idx:
     values:
       - "0"
-      - "1"
-      - "2"
-      - "3"
-      - "4"
+      # - "1"
+      # - "2"
+      # - "3"
+      # - "4"
   gpus:
     values:
       - "-1"
@@ -156,20 +162,21 @@ parameters:
       - "0.75"
   num_workers:
     value: "4"
-  # pretraining_max_epochs:
-  #   values:
+  pretraining_max_epochs:
+    values:
   #     # - "15"
   #     # - "25"
-  #     - "100"
-  #     - "50"
+      - "100"
+      - "50"
+      - "0"
   #     - "200"
   recon_all_thrice:
     value: "True"
-  seed:
-    values:
-      - "42"
-      - "14"
-      - "7"
+  # seed:
+  #   values:
+  #     - "42"
+  #     - "14"
+  #     - "7"
       # - "10"
   split_A:
     value: "True"

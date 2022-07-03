@@ -24,7 +24,8 @@ abc_dm.mode = 'downstream'
 #     classifier = lit_models.DownstreamModel.load_from_checkpoint(param.pretrained_ds_path, param.pretrained_ae_path, abc_dm.class_weights)
 # else:
 #     classifier = lit_models.DownstreamModel(param.pretrained_ae_path, abc_dm.class_weights, **vars(param))
-classifier = lit_models.DownstreamModel(param.pretrained_ae_path, abc_dm.class_weights, **vars(param))
+A_shape, B_shape, C_shape = util.compute_input_shapes(abc_dm)
+classifier = lit_models.DownstreamModel(param.pretrained_ae_path, A_shape, B_shape, C_shape, abc_dm.class_weights, **vars(param))
 latent_save_path = os.path.join(os.path.dirname(param.pretrained_ae_path), 'latents')
 # if param.ds_save_latent_dataset:
 #     classifier.feature_extractor.freeze()
@@ -33,7 +34,7 @@ latent_save_path = os.path.join(os.path.dirname(param.pretrained_ae_path), 'late
 #     param.max_epochs = 1
 classifier_trainer = Trainer.from_argparse_args(param, resume_from_checkpoint=param.pretrained_ds_path)
 
-if param.ds_save_latent_dataset:
+if param.ds_save_latent_pred:
     if param.prediction_data == 'all':
         for pred_data in ['train', 'val', 'test']:
             abc_dm.prediction_data = pred_data

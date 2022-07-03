@@ -704,8 +704,6 @@ class DownstreamModel(pl.LightningModule):
         self.ds_k_class = config['ds_k_class']
         self.ds_k_surv = config['ds_k_surv']
         self.ds_k_reg = config['ds_k_reg']
-        self.ds_save_latent_testing = config['ds_save_latent_testing']
-        self.ds_save_latent_training = config['ds_save_latent_training']
         self.ds_mask_A = config['ds_mask_A']
         self.ds_mask_B = config['ds_mask_B']
         self.ds_masking_method = config['ds_masking_method']
@@ -765,12 +763,8 @@ class DownstreamModel(pl.LightningModule):
         parser.add_argument('--time_num', type=int, default=256, help='number of time intervals in the survival model')
         parser.add_argument('--ds_latent_agg_method', type=str, default='mean',
                                 help='method to aggregate latent representations from autoencoders of A, B and C, options: "mean", "concat", "sum", "all" (pass all latents one by one)')
-        parser.add_argument('--ds_save_latent_testing', default=False, type=lambda x: (str(x).lower() == 'true'),
-                                help='whether to save the latent representations of testing data')
-        parser.add_argument('--ds_save_latent_training', default=False, type=lambda x: (str(x).lower() == 'true'),
-                                help='whether to save the latent representations of training data')
-        parser.add_argument('--ds_save_latent_dataset', default=False, type=lambda x: (str(x).lower() == 'true'),
-                                help='whether to save the latent representations of the whole dataset')
+        parser.add_argument('--ds_save_latent_pred', default=False, type=lambda x: (str(x).lower() == 'true'),
+                                help='whether to save the latent representations of the prediction dataset')
         parser.add_argument('--ds_mask_A', default=False, type=lambda x: (str(x).lower() == 'true'),
                                 help='if True, data from A will be masked')
         parser.add_argument('--ds_mask_B', default=False, type=lambda x: (str(x).lower() == 'true'),
@@ -1017,8 +1011,6 @@ class DownstreamModel(pl.LightningModule):
             self.log("{}_down_loss".format(self.mode), avg_loss)
 
     def training_epoch_end(self, outputs):
-        if self.ds_save_latent_training:
-            self.save_latent(outputs, 'train')
         return self.shared_epoch_end(outputs)
     
     def validation_step(self, batch, batch_idx):
@@ -1041,17 +1033,6 @@ class DownstreamModel(pl.LightningModule):
     
     def test_epoch_end(self, outputs):
         self.shared_epoch_end(outputs)
-        if self.ds_save_latent_testing:
-            self.save_latent(outputs, 'test')
-    
-    def save_latent(self, outputs, mode):
-        sample_ids_list = []
-        for x in outputs:
-            sample_ids_list.extend(x["sample_ids"])
-        h_concat = torch.cat([x["h"] for x in outputs]).cpu().numpy()
-        latent_space = pd.DataFrame(h_concat, index=sample_ids_list)
-        # latent_space.to_csv(os.path.join(self.checkpoint_path, 'latent_space.tsv'), sep='\t')
-        latent_space.to_csv('{}_latent_space.tsv'.format(mode), sep='\t')
     
     def predict_step(self, batch, batch_idx):
         return self.shared_step(batch)
