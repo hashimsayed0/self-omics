@@ -894,7 +894,8 @@ class DownstreamModel(pl.LightningModule):
             "h": h.detach(),
             "y_true": y_true,
             "y_pred": y_pred.detach(),
-            "y_prob": y_prob.detach()
+            "y_prob": y_prob.detach(),
+            "y_out": y_out.detach()
         }
 
     def mask_x_ch(self, x):
@@ -1049,11 +1050,13 @@ class DownstreamModel(pl.LightningModule):
             y_true = np.argmax(y_true_binary, axis=1)
             y_pred = torch.cat([x["y_pred"] for x in outputs]).cpu().numpy()
             y_prob = torch.cat([x["y_prob"] for x in outputs]).cpu().numpy()
+            y_out = torch.cat([x["y_out"] for x in outputs]).cpu().numpy()
             preds = {
                 "y_true": y_true,
                 "y_pred": y_pred,
                 "y_prob": y_prob,
-                "y_true_binary": y_true_binary
+                "y_true_binary": y_true_binary,
+                "y_out": y_out
             }
         
         elif self.ds_task == "surv":

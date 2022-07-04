@@ -193,8 +193,8 @@ def save_model_outputs(outputs, pred_data, ds_model_output_dir):
     sample_ids_list = []
     for x in outputs:
         sample_ids_list.extend(x["sample_ids"])
-    y_prob_concat = torch.cat([x["h"] for x in outputs]).cpu().numpy()
-    model_outputs = pd.DataFrame(y_prob_concat, index=sample_ids_list)
+    y_out_concat = torch.cat([x["y_out"] for x in outputs]).cpu().numpy()
+    model_outputs = pd.DataFrame(y_out_concat, index=sample_ids_list)
     # check if dir exists, else create
     if not os.path.exists(ds_model_output_dir):
         os.makedirs(ds_model_output_dir)
