@@ -38,3 +38,5 @@ abc_dm.mode = 'downstream'
 classifier_trainer.fit(classifier, abc_dm)
 if param.downstream_max_epochs > 0:
     classifier_trainer.test(datamodule=abc_dm, ckpt_path='best')
+else:
+    classifier_trainer.test(model=classifier, datamodule=abc_dm)
