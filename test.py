@@ -27,6 +27,7 @@ abc_dm.mode = 'downstream'
 A_shape, B_shape, C_shape = util.compute_input_shapes(abc_dm)
 classifier = lit_models.DownstreamModel(param.pretrained_ae_path, A_shape, B_shape, C_shape, abc_dm.class_weights, **vars(param))
 latent_save_path = os.path.join(os.path.dirname(param.pretrained_ae_path), 'latents')
+outputs_save_path = os.path.join(os.path.dirname(param.pretrained_ae_path), 'outputs')
 # if param.ds_save_latent_dataset:
 #     classifier.feature_extractor.freeze()
 #     for p in classifier.class_net.parameters():
@@ -34,15 +35,20 @@ latent_save_path = os.path.join(os.path.dirname(param.pretrained_ae_path), 'late
 #     param.max_epochs = 1
 classifier_trainer = Trainer.from_argparse_args(param, resume_from_checkpoint=param.pretrained_ds_path)
 
-if param.ds_save_latent_pred:
-    if param.prediction_data == 'all':
-        for pred_data in ['train', 'val', 'test']:
-            abc_dm.prediction_data = pred_data
-            outputs = classifier_trainer.predict(classifier, datamodule=abc_dm)
-            util.save_latents(outputs, pred_data, latent_save_path)
-    else:
+if param.prediction_data == 'all':
+    for pred_data in ['train', 'val', 'test']:
+        abc_dm.prediction_data = pred_data
         outputs = classifier_trainer.predict(classifier, datamodule=abc_dm)
+        if param.ds_save_latent_pred:
+            util.save_latents(outputs, pred_data, latent_save_path)
+        if param.ds_save_model_outputs:
+            util.save_model_outputs(outputs, pred_data, outputs_save_path)
+else:
+    outputs = classifier_trainer.predict(classifier, datamodule=abc_dm)
+    if param.ds_save_latent_pred:
         util.save_latents(outputs, param.prediction_data, latent_save_path)
+    if param.ds_save_model_outputs:
+        util.save_model_outputs(outputs, param.prediction_data, outputs_save_path)
 
 if param.plot_confusion_matrix:
     if param.ds_task == 'class':

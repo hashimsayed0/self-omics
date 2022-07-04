@@ -188,3 +188,14 @@ def save_latents(outputs, pred_data, latent_dir):
     if not os.path.exists(latent_dir):
         os.makedirs(latent_dir)
     latent_space.to_csv(os.path.join(latent_dir, '{}_latent_space.tsv'.format(pred_data)), sep='\t')
+
+def save_model_outputs(outputs, pred_data, ds_model_output_dir):
+    sample_ids_list = []
+    for x in outputs:
+        sample_ids_list.extend(x["sample_ids"])
+    y_prob_concat = torch.cat([x["h"] for x in outputs]).cpu().numpy()
+    model_outputs = pd.DataFrame(y_prob_concat, index=sample_ids_list)
+    # check if dir exists, else create
+    if not os.path.exists(ds_model_output_dir):
+        os.makedirs(ds_model_output_dir)
+    model_outputs.to_csv(os.path.join(ds_model_output_dir, '{}_model_outputs.tsv'.format(pred_data)), sep='\t')

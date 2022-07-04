@@ -96,7 +96,7 @@
                
                 // "--use_test_as_val_for_downstream", "True",
                 // "--load_pretrained_ae", "True",
-                // "--pretrained_ae_path", "./checkpoints/test/fold-0/pretraining/version_10/epoch=0-step=13.ckpt",
+                // "--pretrained_ae_path", "/l/users/sayed.hashim/files/Research/Methods/contrastive-tcga/sweep/contrastive-omics/checkpoints/new_cont_data_ratio/fold-0/pretraining/version_7/epoch=47-step=576.ckpt",
                 // "--ds_save_latent_testing", "True"
             ]
         },
@@ -328,10 +328,11 @@
                 // "--ds_save_latent_training", "True",
                 // "--ds_save_latent_testing", "True",
                 "--ds_save_latent_pred", "True",
+                "--ds_save_model_outputs", "True",
                 "--prediction_data", "all",
                 "--load_pretrained_ae", "True",
-                "--pretrained_ae_path", "checkpoints/test/fold-0/pretraining/version_6/epoch=49-step=600.ckpt",
-                "--downstream_data_ratio", "0.01",
+                "--pretrained_ae_path", "/l/users/sayed.hashim/files/Research/Methods/contrastive-tcga/sweep/contrastive-omics/checkpoints/new_cont_data_ratio/fold-0/pretraining/version_7/epoch=47-step=576.ckpt",
+                // "--downstream_data_ratio", "0.01",
                 
                 "--use_sample_list", "True",
                 "--gpus", "-1",

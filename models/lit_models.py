@@ -711,7 +711,8 @@ class DownstreamModel(pl.LightningModule):
             self.ae_model = AutoEncoder(A_shape, B_shape, C_shape, **config)
         else:
             self.ae_model = AutoEncoder.load_from_checkpoint(self.ae_model_path)
-        self.ae_model.freeze()
+        if config['ds_freeze_ae']:
+            self.ae_model.freeze()
         self.ds_latent_agg_method = config['ds_latent_agg_method']
         self.ds_add_omics_identity = config['ds_add_omics_identity']
         if self.ds_add_omics_identity:
@@ -765,6 +766,8 @@ class DownstreamModel(pl.LightningModule):
                                 help='method to aggregate latent representations from autoencoders of A, B and C, options: "mean", "concat", "sum", "all" (pass all latents one by one)')
         parser.add_argument('--ds_save_latent_pred', default=False, type=lambda x: (str(x).lower() == 'true'),
                                 help='whether to save the latent representations of the prediction dataset')
+        parser.add_argument('--ds_save_model_outputs', default=False, type=lambda x: (str(x).lower() == 'true'),
+                                help='whether to save the outputs of the downstream model')
         parser.add_argument('--ds_mask_A', default=False, type=lambda x: (str(x).lower() == 'true'),
                                 help='if True, data from A will be masked')
         parser.add_argument('--ds_mask_B', default=False, type=lambda x: (str(x).lower() == 'true'),
@@ -779,6 +782,8 @@ class DownstreamModel(pl.LightningModule):
                                 help='key for the callback to use for regression task')
         parser.add_argument('--ds_add_omics_identity', default=False, type=lambda x: (str(x).lower() == 'true'),
                                 help='add omics id to latent representations before using them for classification task')
+        parser.add_argument('--ds_freeze_ae', default=False, type=lambda x: (str(x).lower() == 'true'),
+                                help='if True, autoencoder will be frozen')
         parser.add_argument("--load_pretrained_ds", default=False, type=lambda x: (str(x).lower() == 'true'),
                                 help='load pretrained downstream model')
         parser.add_argument("--pretrained_ds_path", type=str, default="")
