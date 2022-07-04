@@ -65,7 +65,7 @@
 
                 "--cont_align_loss_criterion", "clip",
                 "--cont_align_loss_weight", "0.5",
-                "--cont_noise_loss_criterion", "barlowtwins",
+                "--cont_noise_loss_criterion", "clip",
                 "--cont_noise_loss_weight", "0.5",
                 "--cont_align_loss_latent", "masked",
                 // "--cont_loss_similarity", "dot",
@@ -94,7 +94,7 @@
                 // "--ds_k_reg", "0.001",
                 // "--ds_add_omics_identity", "True",
                
-                // "--use_test_as_val_for_downstream", "True",
+                "--use_test_as_val_for_downstream", "True",
                 // "--load_pretrained_ae", "True",
                 // "--pretrained_ae_path", "/l/users/sayed.hashim/files/Research/Methods/contrastive-tcga/sweep/contrastive-omics/checkpoints/new_cont_data_ratio/fold-0/pretraining/version_7/epoch=47-step=576.ckpt",
                 // "--ds_save_latent_testing", "True"

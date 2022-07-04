@@ -2,7 +2,7 @@ method: grid
 metric:
   goal: maximize
   name: test_accuracy
-name: new_cont_data_ratio
+name: new_cont_data_ratio_unfrozen_ae
 parameters:
   add_distance_loss_to_latent:
     values:
@@ -42,8 +42,8 @@ parameters:
       # - "False"
   choose_masking_method_every_epoch:
     values:
-      # - "True"
-      - "False"
+      - "True"
+      # - "False"
   cl_loss:
     values:
       - bce
@@ -118,7 +118,7 @@ parameters:
       - class
   exp_name:
     values:
-      - new_cont_data_ratio
+      - new_cont_data_ratio_unfrozen_ae
   fold_idx:
     values:
       - "0"
