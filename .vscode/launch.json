@@ -49,10 +49,10 @@
                 "--ae_net", "ae",
                 "--pretraining_patience", "35",
                 "--downstream_patience", "35",
-                "--pretraining_max_epochs", "100",
-                "--downstream_max_epochs", "150",
+                "--pretraining_max_epochs", "0",
+                "--downstream_max_epochs", "1",
                 "--pretraining_data_ratio", "1",
-                "--downstream_data_ratio", "1",
+                "--downstream_data_ratio", "0.01",
                 "--ae_lr", "0.001",
                 
                 "--ds_latent_agg_method", "sum",
