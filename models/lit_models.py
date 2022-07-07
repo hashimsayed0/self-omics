@@ -623,7 +623,7 @@ class AutoEncoder(pl.LightningModule):
                         for k, v in logs.items():
                             self.log(k, v, on_step=False, on_epoch=True)
                         pretext_loss += self.cont_align_loss_weight * cont_loss
-            self.log('{}_pretext_loss'.format(self.mode), pretext_loss, on_step=False, on_epoch=True)
+        self.log('{}_pretext_loss'.format(self.mode), pretext_loss, on_step=False, on_epoch=True)
         return pretext_loss
     
     def validation_step(self, batch, batch_idx):
@@ -667,10 +667,9 @@ class AutoEncoder(pl.LightningModule):
                         cont_pair_logs, cont_loss = self.cont_align_step(h_type)
                         cont_logs.update(cont_pair_logs)
                         pretext_loss += self.cont_align_loss_weight * cont_loss
-            cont_logs['{}_pretext_loss'.format(self.mode)] = pretext_loss
-            return {**logs, **cont_logs}
-        else:
-            return logs
+            logs.update(cont_logs)
+        logs['{}_pretext_loss'.format(self.mode)] = pretext_loss
+        return logs
 
     def validation_epoch_end(self, outputs):
         for key, value in outputs[0].items():
