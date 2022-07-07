@@ -47,15 +47,15 @@
                 // "--masked_chr_prediction_weight", "1.0",
                 
                 "--ae_net", "ae",
-                "--pretraining_patience", "35",
-                "--downstream_patience", "35",
-                "--pretraining_max_epochs", "0",
+                "--pretraining_patience", "100",
+                "--downstream_patience", "150",
+                "--pretraining_max_epochs", "1",
                 "--downstream_max_epochs", "1",
                 "--pretraining_data_ratio", "1",
                 "--downstream_data_ratio", "0.01",
                 "--ae_lr", "0.001",
                 
-                "--ds_latent_agg_method", "sum",
+                "--ds_latent_agg_method", "mean",
                 // "--ds_mask_B", "True",
                 // "--ds_masking_method", "zero",
                 // "--augment_B", "True",
@@ -63,9 +63,9 @@
                 "--ae_drop_p", "0.0",
                 "--ds_drop_p", "0.0",
 
-                "--cont_align_loss_criterion", "clip",
+                "--cont_align_loss_criterion", "none",
                 "--cont_align_loss_weight", "0.5",
-                "--cont_noise_loss_criterion", "clip",
+                "--cont_noise_loss_criterion", "barlowtwins",
                 "--cont_noise_loss_weight", "0.5",
                 "--cont_align_loss_latent", "masked",
                 // "--cont_loss_similarity", "dot",
@@ -91,10 +91,11 @@
                 // "--use_rep_trick", "True",
 
                 "--ds_task", "class",
+                "--ds_freeze_ae", "True",
                 // "--ds_k_reg", "0.001",
                 // "--ds_add_omics_identity", "True",
                
-                "--use_test_as_val_for_downstream", "True",
+                // "--use_test_as_val_for_downstream", "True",
                 // "--load_pretrained_ae", "True",
                 // "--pretrained_ae_path", "/l/users/sayed.hashim/files/Research/Methods/contrastive-tcga/sweep/contrastive-omics/checkpoints/new_cont_data_ratio/fold-0/pretraining/version_7/epoch=47-step=576.ckpt",
                 // "--ds_save_latent_testing", "True"

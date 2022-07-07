@@ -586,7 +586,6 @@ class AutoEncoder(pl.LightningModule):
         return logs, cons_loss
     
     def training_step(self, batch, batch_idx):
-        self.mode = 'train'
         if self.ae_net == 'ae':
             logs, h, pretext_loss = self.ae_step(batch) 
         elif self.ae_net == 'vae':
