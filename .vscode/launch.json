@@ -63,7 +63,9 @@
                 "--ae_drop_p", "0.0",
                 "--ds_drop_p", "0.0",
 
-                "--cont_align_loss_criterion", "none",
+                "--recon_loss_criterion", "none",
+
+                "--cont_align_loss_criterion", "clip",
                 "--cont_align_loss_weight", "0.5",
                 "--cont_noise_loss_criterion", "barlowtwins",
                 "--cont_noise_loss_weight", "0.5",

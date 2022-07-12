@@ -43,6 +43,7 @@ class AutoEncoder(pl.LightningModule):
         self.ae_epoch_num_decay = ae_epoch_num_decay
         self.ae_decay_step_size = ae_decay_step_size
         self.ae_max_epochs = max_epochs
+        self.recon_loss_criterion = config['recon_loss_criterion']
         self.cont_align_loss_weight = cont_align_loss_weight
         self.cont_noise_loss_weight = config['cont_noise_loss_weight']
         self.cont_loss_temp = cont_loss_temp
@@ -96,6 +97,14 @@ class AutoEncoder(pl.LightningModule):
             elif self.split_B:
                 self.ae = VAESepB((input_size_A, input_size_B, input_size_C), latent_size, dropout_p=ae_drop_p, dim_1B=ae_dim_1B, dim_2B=ae_dim_2B, dim_1A=ae_dim_1A, dim_2A=ae_dim_2A, dim_1C=ae_dim_1C, dim_2C=ae_dim_2C)
         
+        if self.recon_loss_criterion != "none":
+            if self.recon_loss_criterion == "mse":
+                self.recon_criterion = nn.MSELoss()
+            elif self.recon_loss_criterion == "l1":
+                self.recon_criterion = nn.L1Loss()
+            elif self.recon_loss_criterion == 'bce':
+                self.recon_criterion = nn.BCELoss()
+
         self.projection_size = latent_size // 2
         if self.cont_align_loss_criterion != "none":
             if self.cont_align_loss_criterion == "simclr":
@@ -177,6 +186,8 @@ class AutoEncoder(pl.LightningModule):
         parser.add_argument("--ae_weight_decay", type=float, default=1e-4)
         parser.add_argument("--ae_momentum", type=float, default=0.9)
         parser.add_argument("--ae_drop_p", type=float, default=0.2)
+        parser.add_argument("--recon_loss_criterion", type=str, default="mse",
+                            help="Reconstruction loss criterion, options: [none, mse, l1, bce]") 
         parser.add_argument("--cont_align_loss_criterion", type=str, default="barlowtwins", help="contrastive alignment loss to use, options: none, simclr, clip, barlowtwins, ntxent, simsiam")
         parser.add_argument("--cont_noise_loss_criterion", type=str, default="barlowtwins", help="contrastive noise loss to use, options: none, clip, barlowtwins, ntxent")
         parser.add_argument("--add_cont_type_loss", default=False, type=lambda x: (str(x).lower() == 'true')
@@ -321,19 +332,19 @@ class AutoEncoder(pl.LightningModule):
     def sum_subset_losses(self, x_recon, x):
         x_recon_loss = []
         for i in range(len(x)):
-            x_recon_loss.append(F.mse_loss(x_recon[i], x[i]))
+            x_recon_loss.append(self.recon_criterion(x_recon[i], x[i]))
         return sum(x_recon_loss)
     
     def sum_losses(self, x_A_recon, x_B_recon, x_C_recon, x_A, x_B, x_C):
         if self.split_A:
             recon_A_loss = self.sum_subset_losses(x_A_recon, x_A)
         else:
-            recon_A_loss = F.mse_loss(x_A_recon, x_A)
+            recon_A_loss = self.recon_criterion(x_A_recon, x_A)
         if self.split_B:
             recon_B_loss = self.sum_subset_losses(x_B_recon, x_B)
         else:
-            recon_B_loss = F.mse_loss(x_B_recon, x_B)
-        recon_C_loss = F.mse_loss(x_C_recon, x_C)
+            recon_B_loss = self.recon_criterion(x_B_recon, x_B)
+        recon_C_loss = self.recon_criterion(x_C_recon, x_C)
         if self.mask_A and self.mask_B:
             recon_loss = 0.4 * recon_A_loss + 0.4 * recon_B_loss + 0.2 * recon_C_loss
         elif self.mask_A:
@@ -376,22 +387,23 @@ class AutoEncoder(pl.LightningModule):
             mask_pred_loss = self.mask_pred_criterion(mask_y_out, mask_y)
             pretext_loss += self.masked_chr_prediction_weight * mask_pred_loss
             logs['{}_mask_pred_loss'.format(self.mode)] = mask_pred_loss
-        if self.recon_all_thrice:
-            recon_list = self.ae.decode((h_A, h_B, h_C))
-        else:
-            recon_list.append(self.ae.decode((h_A, h_B, h_C)))
-        recon_loss = 0
-        for i, x_recon in enumerate(recon_list):
-            x_A_recon, x_B_recon, x_C_recon = x_recon
-            recon_loss_all = self.sum_losses(x_A_recon, x_B_recon, x_C_recon, x_A, x_B, x_C)
-            recon_loss += recon_loss_all
+        if self.recon_loss_criterion != "none":
             if self.recon_all_thrice:
-                logs['{}_recon_all_from_{}_loss'.format(self.mode, string.ascii_uppercase[i])] = recon_loss_all
+                recon_list = self.ae.decode((h_A, h_B, h_C))
             else:
-                logs['{}_recon_all_loss'.format(self.mode)] = recon_loss_all
-        pretext_loss += recon_loss
-        if self.recon_all_thrice:
-            logs['{}_total_recon_all_loss'.format(self.mode)] = recon_loss
+                recon_list.append(self.ae.decode((h_A, h_B, h_C)))
+            recon_loss = 0
+            for i, x_recon in enumerate(recon_list):
+                x_A_recon, x_B_recon, x_C_recon = x_recon
+                recon_loss_all = self.sum_losses(x_A_recon, x_B_recon, x_C_recon, x_A, x_B, x_C)
+                recon_loss += recon_loss_all
+                if self.recon_all_thrice:
+                    logs['{}_recon_all_from_{}_loss'.format(self.mode, string.ascii_uppercase[i])] = recon_loss_all
+                else:
+                    logs['{}_recon_all_loss'.format(self.mode)] = recon_loss_all
+            pretext_loss += recon_loss
+            if self.recon_all_thrice:
+                logs['{}_total_recon_all_loss'.format(self.mode)] = recon_loss
         
         if self.cont_align_loss_latent == 'unmasked':
             h_A, h_B, h_C = h_A_unmasked, h_B_unmasked, h_C_unmasked
@@ -407,7 +419,7 @@ class AutoEncoder(pl.LightningModule):
             x_B_masked = self.mask_x_ch(x_B, self.mask_B_ids)
             z, recon_x, mean, log_var = self.ae((x_A, x_B_masked, x_C))
             recon_B_loss = self.sum_subset_losses(recon_x[1], x_B)
-            recon_loss_all = F.mse_loss(recon_x[0], x_A) + recon_B_loss + F.mse_loss(recon_x[2], x_C)
+            recon_loss_all = self.recon_criterion(recon_x[0], x_A) + recon_B_loss + self.recon_criterion(recon_x[2], x_C)
             kl_loss = -0.5 * torch.mean(1 + log_var - mean.pow(2) - log_var.exp())
             recon_loss = recon_B_loss + kl_loss
             logs['{}_recon_B_loss'.format(self.mode)] = recon_B_loss
@@ -418,7 +430,7 @@ class AutoEncoder(pl.LightningModule):
             h, recon_x, mean, log_var = self.ae((x_A_masked, x_B, x_C))
             recon_A_loss = self.sum_subset_losses(recon_x[0], x_A)
             recon_B_loss = self.sum_subset_losses(recon_x[1], x_B)
-            recon_loss_all = recon_A_loss + recon_B_loss + F.mse_loss(recon_x[2], x_C)
+            recon_loss_all = recon_A_loss + recon_B_loss + self.recon_criterion(recon_x[2], x_C)
             kl_loss = -0.5 * torch.mean(1 + log_var - mean.pow(2) - log_var.exp())
             recon_loss = recon_A_loss + kl_loss
             logs['{}_recon_A_loss'.format(self.mode)] = recon_A_loss
@@ -426,9 +438,9 @@ class AutoEncoder(pl.LightningModule):
 
         else:
             h, recon_x, mean, log_var = self.ae((x_A, x_B, x_C))
-            recon_A_loss = F.mse_loss(recon_x[0], x_A)
+            recon_A_loss = self.recon_criterion(recon_x[0], x_A)
             recon_B_loss = self.sum_subset_losses(recon_x[1], x_B)
-            recon_C_loss = F.mse_loss(recon_x[2], x_C)
+            recon_C_loss = self.recon_criterion(recon_x[2], x_C)
             recon_loss_all = recon_A_loss + recon_B_loss + recon_C_loss
             kl_loss = -0.5 * torch.mean(1 + log_var - mean.pow(2) - log_var.exp())
             recon_loss = recon_A_loss + recon_B_loss + recon_C_loss + kl_loss
@@ -537,9 +549,9 @@ class AutoEncoder(pl.LightningModule):
             recon_list = self.ae.decode((h_A, h_B, h_C))
             x_recon = (recon_list[0][0], recon_list[1][1], recon_list[2][2])
             h_A_recon, h_B_recon, h_C_recon = self.ae.encode(x_recon)
-        latent_recon_loss += F.mse_loss(h_A, h_A_recon)
-        latent_recon_loss += F.mse_loss(h_B, h_B_recon)
-        latent_recon_loss += F.mse_loss(h_C, h_C_recon)
+        latent_recon_loss += self.recon_criterion(h_A, h_A_recon)
+        latent_recon_loss += self.recon_criterion(h_B, h_B_recon)
+        latent_recon_loss += self.recon_criterion(h_C, h_C_recon)
         return logs, latent_recon_loss
     
     def cont_noise_step(self, h_masked, h_unmasked, omics_type='A'):
