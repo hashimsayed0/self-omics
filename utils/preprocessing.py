@@ -66,3 +66,16 @@ def select_features(df, labels, train_id, val_id, test_id, feature_selection, fe
     df.iloc[:,test_id] = X_test.T
                 
     return df
+
+def scale_features(scaler, df, train_id, val_id, test_id):
+    X_train = df.iloc[:,train_id].T.values
+    X_test = df.iloc[:,test_id].T.values
+    X_val = df.iloc[:,val_id].T.values
+    X_train = scaler.fit_transform(X_train)
+    X_test = scaler.transform(X_test)
+    X_val = scaler.transform(X_val)
+    scaled_df = pd.DataFrame(index=df.index, columns=df.columns)
+    scaled_df.iloc[:,train_id] = X_train.T
+    scaled_df.iloc[:,val_id] = X_val.T
+    scaled_df.iloc[:,test_id] = X_test.T
+    return scaled_df
