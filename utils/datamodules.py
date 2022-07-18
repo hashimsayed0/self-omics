@@ -2,11 +2,12 @@ from pytorch_lightning import LightningDataModule
 import os
 import numpy as np
 import pandas as pd
+from .preprocessing import select_features, scale_features
 from sklearn.model_selection import StratifiedKFold, StratifiedShuffleSplit, train_test_split
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from .datasets import ABCDataset
 from torch.utils.data import DataLoader
 from sklearn.utils import class_weight
-from .preprocessing import select_features
 import torch
 
 class ABCDataModule(LightningDataModule):
@@ -24,6 +25,7 @@ class ABCDataModule(LightningDataModule):
         self.augment_B = config['augment_B']
         self.augment_A = config['augment_A']
         self.seed = seed
+        self.data_scaler = config['data_scaler']
         self.feature_selection = feature_selection
         self.feature_selection_alpha = feature_selection_alpha
         self.feature_selection_percentile = feature_selection_percentile
@@ -91,6 +93,7 @@ class ABCDataModule(LightningDataModule):
         parser.add_argument("--feature_selection", type=str, default="none", help="options: none, f_test, chi2, mutual_info, all")
         parser.add_argument("--feature_selection_alpha", type=float, default=0.01)
         parser.add_argument("--feature_selection_percentile", type=float, default=10)
+        parser.add_argument("--data_scaler", type=str, default="none", help="options: standard, minmax, none")
         return parent_parser
 
     def load_data(self):
@@ -117,8 +120,6 @@ class ABCDataModule(LightningDataModule):
             samp_min_A = list(set(sample_list).difference(set(self.A_df.columns.to_list())))
             aug_df = pd.DataFrame(np.zeros((self.A_df.shape[0],len(samp_min_A))), columns=samp_min_A, index=self.A_df.index)
             self.A_df = pd.concat([self.A_df, aug_df], axis=1)
-        if self.split_A:
-            self.A_df, _ = self.separate_A(self.A_df)
         
         self.B_df = self.B_df.loc[:, sample_list]
         if self.augment_B:
@@ -126,8 +127,6 @@ class ABCDataModule(LightningDataModule):
             samp_min_B = list(set(sample_list).difference(set(self.B_df.columns.to_list())))
             aug_df = pd.DataFrame(np.zeros((self.B_df.shape[0],len(samp_min_B))), columns=samp_min_B, index=self.B_df.index)
             self.B_df = pd.concat([self.B_df, aug_df], axis=1)
-        if self.split_B:
-            self.B_df, _ = self.separate_B(self.B_df)
             
         self.C_df = self.C_df.loc[:, sample_list]
 
@@ -168,6 +167,23 @@ class ABCDataModule(LightningDataModule):
                 self.train_index, self.val_index = train_test_split(train_index, test_size=self.val_ratio, random_state=self.seed, stratify=self.labels.iloc[train_index])
                 self.test_index = test_index
                 break
+
+        if self.data_scaler != 'none':
+            if self.data_scaler == 'standard':
+                scaler = StandardScaler()
+            elif self.data_scaler == 'minmax':
+                scaler = MinMaxScaler()
+            print('Scaling A')
+            self.A_df = scale_features(scaler, self.A_df, self.train_index, self.val_index, self.test_index)
+            print('Scaling B')
+            self.B_df = scale_features(scaler, self.B_df, self.train_index, self.val_index, self.test_index)
+            print('Scaling C')
+            self.C_df = scale_features(scaler, self.C_df, self.train_index, self.val_index, self.test_index)
+
+        if self.split_A:
+            self.A_df, _ = self.separate_A(self.A_df)
+        if self.split_B:
+            self.B_df, _ = self.separate_B(self.B_df)
 
         if self.feature_selection != "none":
             self.A_df = select_features(self.A_df, self.labels, self.train_index, self.val_index, self.test_index, self.feature_selection, self.feature_selection_alpha, self.feature_selection_percentile)
