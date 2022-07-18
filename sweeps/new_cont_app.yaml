@@ -2,7 +2,7 @@ method: grid
 metric:
   goal: maximize
   name: test_accuracy
-name: new_cont_data_ratio_unfrozen_ae
+name: semi_sup_unfrozen_norm
 parameters:
   add_distance_loss_to_latent:
     values:
@@ -54,10 +54,12 @@ parameters:
     values:
       # - barlowtwins
       - clip
+      # - none
   cont_noise_loss_criterion:
     values:
-      # - barlowtwins
-      - clip
+      - barlowtwins
+      # - clip
+      # - none
   cont_loss_temp:
     values:
       - "0.1"
@@ -83,6 +85,10 @@ parameters:
   data_dir:
     values:
       - ./data/ABC_inter/Normalized
+  deterministic:
+    values:
+      - "True"
+      # - "False"
   distance_loss_weight:
     values:
       # - "1.0"
@@ -101,14 +107,21 @@ parameters:
       - "0.01"
       - "0.05"
       - "0.1"
+      - "0.2"
+      - "0.5"
       - "1.0"
   ds_drop_p:
     values:
       - "0.0"
       # - "0.2"
+  ds_freeze_ae:
+    values:
+      # - "True"
+      - "False"
   ds_latent_agg_method:
     values:
-      - sum
+      - mean
+      # - sum
       # - concat
   # ds_lr:
   #   values:
@@ -118,7 +131,7 @@ parameters:
       - class
   exp_name:
     values:
-      - new_cont_data_ratio_unfrozen_ae
+      - semi_sup_unfrozen_norm
   fold_idx:
     values:
       - "0"
@@ -135,6 +148,7 @@ parameters:
   mask_A:
     values:
       - "True"
+      # - "False"
   masking_method:
     values:
       # - gaussian_noise
@@ -167,11 +181,18 @@ parameters:
   #     # - "15"
   #     # - "25"
       - "100"
-      - "50"
+      # - "50"
       - "0"
+      # - "15"
+      # - "25"
   #     - "200"
   recon_all_thrice:
     value: "True"
+  recon_loss_criterion:
+    values:
+      - "mse"
+  #     - "bce"
+  #     - "l1"
   # seed:
   #   values:
   #     - "42"
@@ -185,6 +206,6 @@ parameters:
       - "True"
   use_sample_list:
     value: "True"
-  use_test_as_val_for_downstream:
-    value: "True"
+  # use_test_as_val_for_downstream:
+  #   value: "True"
 program: train.py
