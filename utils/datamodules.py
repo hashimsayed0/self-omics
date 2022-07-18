@@ -310,9 +310,11 @@ class ABCDataModule(LightningDataModule):
                 if self.pretraining_data_ratio != 1:
                     np.random.seed(self.seed)
                     train_index = np.random.choice(self.train_index, size=int(self.pretraining_data_ratio * len(self.train_index)), replace=False)
+                    np.random.seed(self.seed)
+                    val_index = np.random.choice(self.val_index, size=int(self.pretraining_data_ratio * len(self.val_index)), replace=False)
             if stage == "fit" or stage is None:
                 self.trainset = ABCDataset(self.A_df, self.B_df, self.C_df, train_index, self.split_A, self.split_B, self.ds_tasks, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor, self.values)
-                self.valset = ABCDataset(self.A_df, self.B_df, self.C_df, self.val_index, self.split_A, self.split_B, self.ds_tasks, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor, self.values)
+                self.valset = ABCDataset(self.A_df, self.B_df, self.C_df, val_index, self.split_A, self.split_B, self.ds_tasks, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor, self.values)
             
             if stage == "test" or stage is None or stage == "predict":
                 self.testset = ABCDataset(self.A_df, self.B_df, self.C_df, self.test_index, self.split_A, self.split_B, self.ds_tasks, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor, self.values)
@@ -330,7 +332,7 @@ class ABCDataModule(LightningDataModule):
                     self.valset = ABCDataset(self.A_df, self.B_df, self.C_df, self.test_index, self.split_A, self.split_B, self.ds_tasks, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor, self.values)
                 else:
                     self.trainset = ABCDataset(self.A_df, self.B_df, self.C_df, train_index, self.split_A, self.split_B, self.ds_tasks, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor, self.values)
-                    self.valset = ABCDataset(self.A_df, self.B_df, self.C_df, self.val_index, self.split_A, self.split_B, self.ds_tasks, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor, self.values)
+                    self.valset = ABCDataset(self.A_df, self.B_df, self.C_df, val_index, self.split_A, self.split_B, self.ds_tasks, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor, self.values)
             
             if stage == "test" or stage is None:
                 self.testset = ABCDataset(self.A_df, self.B_df, self.C_df, self.test_index, self.split_A, self.split_B, self.ds_tasks, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor, self.values)
@@ -345,7 +347,7 @@ class ABCDataModule(LightningDataModule):
                     if self.use_test_as_val_for_downstream:
                         self.predset = ABCDataset(self.A_df, self.B_df, self.C_df, self.test_index, self.split_A, self.split_B, self.ds_tasks, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor, self.values)
                     else:
-                        self.predset = ABCDataset(self.A_df, self.B_df, self.C_df, self.val_index, self.split_A, self.split_B, self.ds_tasks, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor, self.values)
+                        self.predset = ABCDataset(self.A_df, self.B_df, self.C_df, val_index, self.split_A, self.split_B, self.ds_tasks, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor, self.values)
                 elif self.prediction_data == 'test':
                     self.predset = ABCDataset(self.A_df, self.B_df, self.C_df, self.test_index, self.split_A, self.split_B, self.ds_tasks, self.labels, self.survival_T_array, self.survival_E_array, self.y_true_tensor, self.values)
 
