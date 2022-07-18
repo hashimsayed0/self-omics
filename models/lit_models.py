@@ -794,9 +794,9 @@ class DownstreamModel(pl.LightningModule):
                                 help='add omics id to latent representations before using them for classification task')
         parser.add_argument('--ds_freeze_ae', default=False, type=lambda x: (str(x).lower() == 'true'),
                                 help='if True, autoencoder will be frozen')
-        parser.add_argument("--load_pretrained_ds", default=False, type=lambda x: (str(x).lower() == 'true'),
+        parser.add_argument("--load_ds_model", default=False, type=lambda x: (str(x).lower() == 'true'),
                                 help='load pretrained downstream model')
-        parser.add_argument("--pretrained_ds_path", type=str, default="")
+        parser.add_argument("--ds_model_path", type=str, default="")
         parser.add_argument('--downstream_max_epochs', type=int, default=150, help='maximum number of epochs for downstream')
         parser.add_argument('--downstream_patience', type=int, default=35, help='patience for downstream')
         
