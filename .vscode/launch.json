@@ -50,7 +50,7 @@
                 "--ae_net", "ae",
                 "--pretraining_patience", "100",
                 "--downstream_patience", "150",
-                "--pretraining_max_epochs", "1",
+                "--pretraining_max_epochs", "0",
                 "--downstream_max_epochs", "1",
                 "--pretraining_data_ratio", "1",
                 "--downstream_data_ratio", "0.01",
@@ -64,7 +64,7 @@
                 "--ae_drop_p", "0.0",
                 "--ds_drop_p", "0.0",
 
-                "--recon_loss_criterion", "none",
+                "--recon_loss_criterion", "mse",
 
                 "--cont_align_loss_criterion", "clip",
                 "--cont_align_loss_weight", "0.5",
@@ -331,11 +331,14 @@
             "args": [
                 // "--ds_save_latent_training", "True",
                 // "--ds_save_latent_testing", "True",
-                "--ds_save_latent_pred", "True",
-                "--ds_save_model_outputs", "True",
-                "--prediction_data", "all",
+                // "--ds_save_latent_pred", "True",
+                // "--ds_save_model_outputs", "True",
+                "--plot_confusion_matrix", "True",
+                "--prediction_data", "test",
                 "--load_pretrained_ae", "True",
-                "--pretrained_ae_path", "/l/users/sayed.hashim/files/Research/Methods/contrastive-tcga/sweep/contrastive-omics/checkpoints/new_cont_data_ratio/fold-0/pretraining/version_7/epoch=47-step=576.ckpt",
+                "--pretrained_ae_path", "/l/users/sayed.hashim/files/Research/Methods/contrastive-tcga/sweep/contrastive-omics/checkpoints/semi_sup_unfrozen_recon/fold-0/pretraining/version_5/epoch=82-step=996.ckpt",
+                "--load_ds_model", "True",
+                "--ds_model_path", "/l/users/sayed.hashim/files/Research/Methods/contrastive-tcga/sweep/contrastive-omics/checkpoints/semi_sup_unfrozen_recon/fold-0/downstream/version_11/epoch=50-step=612.ckpt",
                 // "--downstream_data_ratio", "0.01",
                 
                 "--use_sample_list", "True",
