@@ -36,6 +36,7 @@ classifier = lit_models.DownstreamModel(ae_model_path, A_shape, B_shape, C_shape
 classifier_trainer = Trainer.from_argparse_args(param, callbacks=[early_stopping, model_checkpoint], logger=[csv_logger, wandb_logger])
 abc_dm.mode = 'downstream'
 classifier_trainer.fit(classifier, abc_dm)
+wandb.config.update({'ds_model_path': model_checkpoint.best_model_path}, allow_val_change=True)
 if param.downstream_max_epochs > 0:
     classifier_trainer.test(datamodule=abc_dm, ckpt_path='best')
 else:
