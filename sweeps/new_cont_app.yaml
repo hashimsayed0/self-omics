@@ -2,7 +2,7 @@ method: grid
 metric:
   goal: maximize
   name: test_accuracy
-name: semi_sup_unfrozen_norm
+name: ablation_latent_agg_method
 parameters:
   add_distance_loss_to_latent:
     values:
@@ -116,13 +116,13 @@ parameters:
       # - "0.2"
   ds_freeze_ae:
     values:
-      # - "True"
-      - "False"
+      - "True"
+      # - "False"
   ds_latent_agg_method:
     values:
       - mean
-      # - sum
-      # - concat
+      - sum
+      - concat
   # ds_lr:
   #   values:
   #     - "0.001"
@@ -131,7 +131,7 @@ parameters:
       - class
   exp_name:
     values:
-      - semi_sup_unfrozen_norm
+      - ablation_latent_agg_method
   fold_idx:
     values:
       - "0"

@@ -694,7 +694,6 @@ class DownstreamModel(pl.LightningModule):
     def __init__(self, ae_model_path, A_shape, B_shape, C_shape, class_weights, **config):
         super(DownstreamModel, self).__init__()
         self.ae_model_path = ae_model_path
-        self.ds_input_size = config['latent_size']
         self.ds_drop_p = config['ds_drop_p']
         self.num_classes = config['num_classes']
         self.ds_lr = config['ds_lr']
@@ -727,6 +726,10 @@ class DownstreamModel(pl.LightningModule):
         self.ds_add_omics_identity = config['ds_add_omics_identity']
         if self.ds_add_omics_identity:
             self.ds_latent_agg_method = 'all'
+        elif self.ds_latent_agg_method == 'concat':
+            self.ds_input_size = config['latent_size'] * 3
+        else:
+            self.ds_input_size = config['latent_size']
         self.num_classes = config['num_classes']
         self.ds_drop_p = config['ds_drop_p']
         self.cl_loss = config['cl_loss']
