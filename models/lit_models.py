@@ -255,8 +255,8 @@ class AutoEncoder(pl.LightningModule):
                                 help='if True, latent vectors from A, B and C are concatenated before being fed into the decoder')
         parser.add_argument('--use_rep_trick', default=False, type=lambda x: (str(x).lower() == 'true'),
                                 help='use reparameterization in trick in ae')
-        parser.add_argument('--pretraining_max_epochs', type=int, default=50, help='maximum number of epochs for pretraining')
-        parser.add_argument('--pretraining_patience', type=int, default=35, help='patience for pretraining')
+        parser.add_argument('--pretraining_max_epochs', type=int, default=100, help='maximum number of epochs for pretraining')
+        parser.add_argument('--pretraining_patience', type=int, default=100, help='patience for pretraining')
         parser.add_argument('--add_MMD_loss', default=False, type=lambda x: (str(x).lower() == 'true'),
                                 help='add MMD loss')
         parser.add_argument('--MMD_loss_weight', type=float, default=0.5,
@@ -798,7 +798,7 @@ class DownstreamModel(pl.LightningModule):
                                 help='load pretrained downstream model')
         parser.add_argument("--ds_model_path", type=str, default="")
         parser.add_argument('--downstream_max_epochs', type=int, default=150, help='maximum number of epochs for downstream')
-        parser.add_argument('--downstream_patience', type=int, default=35, help='patience for downstream')
+        parser.add_argument('--downstream_patience', type=int, default=150, help='patience for downstream')
         
         return parent_parser
 
