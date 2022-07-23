@@ -726,8 +726,10 @@ class DownstreamModel(pl.LightningModule):
         self.ds_add_omics_identity = config['ds_add_omics_identity']
         if self.ds_add_omics_identity:
             self.ds_latent_agg_method = 'all'
-        elif self.ds_latent_agg_method == 'concat':
+        elif self.ds_latent_agg_method in ['concat', 'concatpw']:
             self.ds_input_size = config['latent_size'] * 3
+        elif self.ds_latent_agg_method in ['concat_and_mean', 'concatpw_with_mean']:
+            self.ds_input_size = config['latent_size'] * 4
         else:
             self.ds_input_size = config['latent_size']
         self.num_classes = config['num_classes']
@@ -776,7 +778,7 @@ class DownstreamModel(pl.LightningModule):
         parser.add_argument('--survival_T_max', type=float, default=-1, help='maximum T value for survival prediction task')
         parser.add_argument('--time_num', type=int, default=256, help='number of time intervals in the survival model')
         parser.add_argument('--ds_latent_agg_method', type=str, default='mean',
-                                help='method to aggregate latent representations from autoencoders of A, B and C, options: "mean", "concat", "sum", "all" (pass all latents one by one)')
+                                help='method to aggregate latent representations from autoencoders of A, B and C, options: "mean", "concat", "concat_and_mean", "concatpw" (concat pointwise), "concatpw_with_mean", "sum", "all" (pass all latents one by one)')
         parser.add_argument('--ds_save_latent_pred', default=False, type=lambda x: (str(x).lower() == 'true'),
                                 help='whether to save the latent representations of the prediction dataset')
         parser.add_argument('--ds_save_model_outputs', default=False, type=lambda x: (str(x).lower() == 'true'),
@@ -821,6 +823,23 @@ class DownstreamModel(pl.LightningModule):
             h_A, h_B, h_C = self.ae_model(x)
             if self.ds_latent_agg_method == 'concat':
                 h = torch.cat([h_A, h_B, h_C], dim=1)
+            elif self.ds_latent_agg_method == 'concat_and_mean':
+                h = torch.cat([h_A, h_B, h_C, torch.mean(torch.stack([h_A, h_B, h_C]), axis=0)], dim=1)
+            elif self.ds_latent_agg_method == 'concatpw':
+                h = torch.zeros(h_A.shape[0], h_A.shape[1]*3)
+                for i in range(h_A.shape[0]):
+                    for j in range(h_A.shape[1]):
+                        h[i, j*3] = h_A[i, j]
+                        h[i, j*3+1] = h_B[i, j]
+                        h[i, j*3+2] = h_C[i, j]
+            elif self.ds_latent_agg_method == 'concatpw_with_mean':
+                h = torch.zeros(h_A.shape[0], h_A.shape[1]*4)
+                for i in range(h_A.shape[0]):
+                    for j in range(h_A.shape[1]):
+                        h[i, j*4] = h_A[i, j]
+                        h[i, j*4+1] = h_B[i, j]
+                        h[i, j*4+2] = h_C[i, j]
+                        h[i, j*4+3] = torch.mean(torch.stack([h_A[i, j], h_B[i, j], h_C[i, j]]), axis=0)
             elif self.ds_latent_agg_method == 'mean':
                 h = torch.mean(torch.stack([h_A, h_B, h_C]), axis=0)
             elif self.ds_latent_agg_method == 'sum':
