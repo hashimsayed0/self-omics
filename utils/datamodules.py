@@ -92,7 +92,7 @@ class ABCDataModule(LightningDataModule):
         parser.add_argument('--train_downstream_on_some_types', default=False, type=lambda x: (str(x).lower() == 'true'),
                                 help='if True, train downstream network on some cancer types, otherwise train on all cancer types or a proportion of it based on the param "downstream_data_ratio"')
         parser.add_argument('--downstream_cancer_types', type=str, default='all',
-                                help='cancer types to train downstream on, if "train_downstream_on_some_types" is set to True; options: ["all", "5_least_common" (5 least common cancer types), "10_least_common", "20_least_common", "custom" (should be given in a file named "downstream_cancer_types.tsv" in the data directory)]')
+                                help='cancer types to train downstream on, if "train_downstream_on_some_types" is set to True; options: ["all", "n_least_common" (n least common cancer types where 1 <= n <= 33), "custom" (should be given in a file named "downstream_cancer_types.tsv" in the data directory)]')
         parser.add_argument('--pretraining_data_ratio', type=float, default=1.0,
                                 help='ratio of training data to be used for pretraining')
         parser.add_argument('--downstream_data_ratio', type=float, default=1.0,
@@ -174,8 +174,7 @@ class ABCDataModule(LightningDataModule):
                 ds_cancer_types = np.loadtxt(cancer_types_path, delimiter='\t', dtype='<U32')
                 ds_tumour_indices = self.tumour_index['Index'][self.tumour_index['Tumour type'].isin(ds_cancer_types)]
             elif self.downstream_cancer_types == 'all':
-                ds_cancer_types = self.classes
-                ds_tumour_indices = self.tumour_index['Index'][self.tumour_index['Tumour type'].isin(ds_cancer_types)] 
+                ds_tumour_indices = np.arange(len(self.classes))
             elif self.downstream_cancer_types.endswith('least_common'):
                 n = int(self.downstream_cancer_types.split('_')[0])
                 ds_tumour_indices = self.labels['sample_type.samples'].value_counts()[-n:].index.to_list()

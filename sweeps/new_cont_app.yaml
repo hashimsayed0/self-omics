@@ -2,7 +2,7 @@ method: grid
 metric:
   goal: maximize
   name: test_accuracy
-name: ablation_latent_agg_method_concat
+name: semi_sup_cancer_types
 parameters:
   add_distance_loss_to_latent:
     values:
@@ -102,14 +102,14 @@ parameters:
   # downstream_max_epochs:
   #   values:
   #     - "200"
-  downstream_data_ratio:
-    values:
-      - "0.01"
-      - "0.05"
-      - "0.1"
-      - "0.2"
-      - "0.5"
-      - "1.0"
+  # downstream_data_ratio:
+  #   values:
+  #     - "0.01"
+  #     - "0.05"
+  #     - "0.1"
+  #     - "0.2"
+  #     - "0.5"
+  #     - "1.0"
   ds_drop_p:
     values:
       - "0.0"
@@ -122,10 +122,10 @@ parameters:
     values:
       # - mean
       # - sum
-      # - concat
-      - "concat_and_mean"
-      - "concatpw"
-      - "concatpw_with_mean"
+      - concat
+      # - "concat_and_mean"
+      # - "concatpw"
+      # - "concatpw_with_mean"
   # ds_lr:
   #   values:
   #     - "0.001"
@@ -134,7 +134,7 @@ parameters:
       - class
   exp_name:
     values:
-      - ablation_latent_agg_method_concat
+      - semi_sup_cancer_types
   fold_idx:
     values:
       - "0"
@@ -207,6 +207,19 @@ parameters:
   split_B:
     values:
       - "True"
+  train_downstream_on_some_types:
+    values:
+      - "True"
+      # - "False"
+  downstream_cancer_types:
+    values:
+      - "1_least_common"
+      - "3_least_common"
+      - "5_least_common"
+      - "10_least_common"
+      - "20_least_common"
+      - "25_least_common"
+      - "all"
   use_sample_list:
     value: "True"
   # use_test_as_val_for_downstream:

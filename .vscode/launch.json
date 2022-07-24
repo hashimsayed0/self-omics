@@ -55,7 +55,7 @@
                 "--pretraining_data_ratio", "0.001",
                 "--downstream_data_ratio", "0.001",
                 "--train_downstream_on_some_types", "True",
-                "--downstream_cancer_types", "5_least_common",
+                "--downstream_cancer_types", "1_least_common",
                 "--ae_lr", "0.001",
                 
                 "--ds_latent_agg_method", "concatpw",
