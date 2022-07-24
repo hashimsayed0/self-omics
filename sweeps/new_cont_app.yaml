@@ -2,7 +2,7 @@ method: grid
 metric:
   goal: maximize
   name: test_accuracy
-name: ablation_latent_agg_method
+name: ablation_latent_agg_method_concat
 parameters:
   add_distance_loss_to_latent:
     values:
@@ -120,9 +120,12 @@ parameters:
       # - "False"
   ds_latent_agg_method:
     values:
-      - mean
-      - sum
-      - concat
+      # - mean
+      # - sum
+      # - concat
+      - "concat_and_mean"
+      - "concatpw"
+      - "concatpw_with_mean"
   # ds_lr:
   #   values:
   #     - "0.001"
@@ -131,7 +134,7 @@ parameters:
       - class
   exp_name:
     values:
-      - ablation_latent_agg_method
+      - ablation_latent_agg_method_concat
   fold_idx:
     values:
       - "0"

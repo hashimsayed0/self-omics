@@ -826,14 +826,14 @@ class DownstreamModel(pl.LightningModule):
             elif self.ds_latent_agg_method == 'concat_and_mean':
                 h = torch.cat([h_A, h_B, h_C, torch.mean(torch.stack([h_A, h_B, h_C]), axis=0)], dim=1)
             elif self.ds_latent_agg_method == 'concatpw':
-                h = torch.zeros(h_A.shape[0], h_A.shape[1]*3)
+                h = torch.zeros(h_A.shape[0], h_A.shape[1]*3).to(self.device)
                 for i in range(h_A.shape[0]):
                     for j in range(h_A.shape[1]):
                         h[i, j*3] = h_A[i, j]
                         h[i, j*3+1] = h_B[i, j]
                         h[i, j*3+2] = h_C[i, j]
             elif self.ds_latent_agg_method == 'concatpw_with_mean':
-                h = torch.zeros(h_A.shape[0], h_A.shape[1]*4)
+                h = torch.zeros(h_A.shape[0], h_A.shape[1]*4).to(self.device)
                 for i in range(h_A.shape[0]):
                     for j in range(h_A.shape[1]):
                         h[i, j*4] = h_A[i, j]
