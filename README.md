@@ -25,4 +25,4 @@ conda env create -f environment.yml
 4. Logs will be uploaded to wandb once you login and models will be saved in checkpoints folder
 
 ## Acknowledgments
-Code for a few functions and networks have been taken from the repository, [OmiEmbed](https://github.com/zhangxiaoyu11/OmiEmbed) and modified as needed.
+Code for a few functions and networks have been taken from the repository [OmiEmbed](https://github.com/zhangxiaoyu11/OmiEmbed) and modified as needed.
