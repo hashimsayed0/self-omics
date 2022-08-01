@@ -1,4 +1,4 @@
-# self-omics
+# Self-omics: A Self-supervised Learning Framework for Multi-omics Cancer Data
 
 ## Architecture
 ![pretext_arch (1)](https://user-images.githubusercontent.com/26195507/182119254-51739483-5d86-4793-98f2-8ac393e2f8db.png)
