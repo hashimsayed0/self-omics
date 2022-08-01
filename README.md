@@ -11,9 +11,9 @@ conda env create -f environment.yml
 
 ## Prepare data
 1. Data can be downloaded from [UCSC Xena Data Portal](https://xenabrowser.net/datapages/?cohort=GDC%20Pan-Cancer%20(PANCAN)&removeHub=https%3A%2F%2Fxena.treehouse.gi.ucsc.edu%3A443) using the following links
-- [Gene expression](https://gdc-hub.s3.us-east-1.amazonaws.com/download/GDC-PANCAN.htseq_fpkm-uq.tsv.gz)
-- [DNA methylation](https://gdc-hub.s3.us-east-1.amazonaws.com/download/GDC-PANCAN.methylation450.tsv.gz)
-- [miRNA expression](https://gdc-hub.s3.us-east-1.amazonaws.com/download/GDC-PANCAN.mirna.tsv.gz)
+  - [Gene expression](https://gdc-hub.s3.us-east-1.amazonaws.com/download/GDC-PANCAN.htseq_fpkm-uq.tsv.gz)
+  - [DNA methylation](https://gdc-hub.s3.us-east-1.amazonaws.com/download/GDC-PANCAN.methylation450.tsv.gz)
+  - [miRNA expression](https://gdc-hub.s3.us-east-1.amazonaws.com/download/GDC-PANCAN.mirna.tsv.gz)
 2. Rename gene expression data as A.tsv, DNA methylation data as B.tsv, and miRNA expression dataset as C.tsv
 3. Place the files in data folder
 3. (Optional) Run cells in notebooks/preprocessing.ipynb to convert .tsv files to .npy files
