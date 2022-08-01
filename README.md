@@ -18,4 +18,4 @@ conda env create -f environment.yml
 1. Clone this repository: `git clone https://github.com/hashimsayed0/self-omics.git`
 2. Change directory to this project folder: `cd self-omics`
 3. Edit scrips/train.sh as you like and run the script: `sh ./scripts/train.sh`
-4. Logs will be uploaded to wandb once you login and models will be saved in checkpoints
+4. Logs will be uploaded to wandb once you login and models will be saved in checkpoints folder
