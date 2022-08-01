@@ -3,7 +3,7 @@ import pandas as pd
 from pytorch_lightning import Trainer, seed_everything
 import torch
 import numpy as np
-from models.lit_models import AutoEncoder, DownstreamModel, ComicsModel, Comics
+from models.lit_models import AutoEncoder, DownstreamModel, Comics
 import pytorch_lightning.loggers as pl_loggers
 from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
 import os
