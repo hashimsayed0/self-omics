@@ -1,14 +1,14 @@
 # Folders
 data/
-anno/
 checkpoints/
 wandb
 images
 catboost_info/
 lightning_logs/
 latents/
-notebooks/preprocessing.ipynb
 
+# Don't ignore
+!data/sample_list.tsv
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

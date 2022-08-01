@@ -21,6 +21,7 @@ class ABCDataModule(LightningDataModule):
         self.batch_size = batch_size
         self.val_ratio = val_ratio
         self.num_workers = num_workers
+        self.data_format = config['data_format']
         self.split_A = split_A
         self.split_B = split_B
         self.augment_B = config['augment_B']
@@ -61,11 +62,13 @@ class ABCDataModule(LightningDataModule):
     @staticmethod
     def add_data_module_args(parent_parser):
         parser = parent_parser.add_argument_group("ABCDataModule")
-        parser.add_argument("--data_dir", type=str, default="./data/ABC_inter/Normalized",
+        parser.add_argument("--data_dir", type=str, default="./data",
                             help="directory containing the dataset")
+        parser.add_argument('--data_format', type=str, default='npy',
+                            help='the format in which data is stored, options: [npy, tsv]')
         parser.add_argument('--use_sample_list', default=False, type=lambda x: (str(x).lower() == 'true'),
                                 help='provide a subset sample list of the dataset, store in the path data_dir/sample_list.tsv, if False use all the samples')
-        parser.add_argument('--batch_size', type=int, default=32,
+        parser.add_argument('--batch_size', type=int, default=512,
                                 help='data batch size')
         parser.add_argument('--val_ratio', type=float, default=0.15,
                                 help='val proportion of total training data')
@@ -109,13 +112,14 @@ class ABCDataModule(LightningDataModule):
         self.C_df = self.load_file('C')
 
         if self.use_sample_list:
-            if self.augment_B:
-                sample_list_folder = 'AC_inter'
-            elif self.augment_A:
-                sample_list_folder = 'BC_inter'
-            else:
-                sample_list_folder = 'ABC_inter'
-            sample_list_path = os.path.join(self.data_dir, 'sample_lists', self.ds_task, sample_list_folder, 'sample_list.tsv')
+            # if self.augment_B:
+            #     sample_list_folder = 'AC_inter'
+            # elif self.augment_A:
+            #     sample_list_folder = 'BC_inter'
+            # else:
+            #     sample_list_folder = 'ABC_inter'
+            # sample_list_path = os.path.join(self.data_dir, 'sample_lists', self.ds_task, sample_list_folder, 'sample_list.tsv')
+            sample_list_path = os.path.join(self.data_dir, 'sample_list.tsv')
             print('Loading sample list from ' + sample_list_path)
             sample_list = np.loadtxt(sample_list_path, delimiter='\t', dtype='<U32')
         else:
@@ -218,16 +222,21 @@ class ABCDataModule(LightningDataModule):
         self.labels = pd.get_dummies(self.labels.iloc[:,0])
         
     def load_file(self, file_name):
-        file_path = os.path.join(self.data_dir, file_name + '.npy')
-        print('Loading data from ' + file_path)
-        values = np.load(file_path, allow_pickle=True)
-        features_path = os.path.join(self.data_dir, file_name + '_features.npy')
-        print('Loading features from ' + features_path)
-        features = np.load(features_path, allow_pickle=True)
-        samples_path = os.path.join(self.data_dir, file_name + '_samples.npy')
-        print('Loading samples from ' + samples_path)
-        samples = np.load(samples_path, allow_pickle=True)
-        df = pd.DataFrame(data=values, index=features, columns=samples)
+        if self.data_format == 'npy':
+            file_path = os.path.join(self.data_dir, file_name + '.npy')
+            print('Loading data from ' + file_path)
+            values = np.load(file_path, allow_pickle=True)
+            features_path = os.path.join(self.data_dir, file_name + '_features.npy')
+            print('Loading features from ' + features_path)
+            features = np.load(features_path, allow_pickle=True)
+            samples_path = os.path.join(self.data_dir, file_name + '_samples.npy')
+            print('Loading samples from ' + samples_path)
+            samples = np.load(samples_path, allow_pickle=True)
+            df = pd.DataFrame(data=values, index=features, columns=samples)
+        elif self.data_format == 'tsv':
+            file_path = os.path.join(self.data_dir, file_name + '.tsv')
+            print('Loading data from ' + file_path)
+            df = pd.read_csv(file_path, sep='\t', header=0, index_col=0)
         return df
     
 
@@ -307,7 +316,7 @@ class ABCDataModule(LightningDataModule):
             A_df_list(list) -- a list with 23 subset dataframe
             A_dim(list) -- the dims of each chromosome
         """
-        anno = pd.read_csv('./anno/A_anno2.txt', dtype={'CHR': str}, index_col=0, sep='\t')
+        anno = pd.read_csv('./anno/A_anno.txt', dtype={'CHR': str}, index_col=0, sep='\t')
         genes = sorted([g for g in A_df.index if g.split('.')[0] in anno.index])
         anno = anno.sort_index()
         anno.index = genes

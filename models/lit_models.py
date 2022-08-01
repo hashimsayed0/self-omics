@@ -176,19 +176,19 @@ class AutoEncoder(pl.LightningModule):
     @staticmethod
     def add_model_specific_args(parent_parser):
         parser = parent_parser.add_argument_group("AutoEncoder")
-        parser.add_argument("--ae_net", type=str, default="vae",
+        parser.add_argument("--ae_net", type=str, default="ae",
                             help="AutoEncoder network architecture, options: [ae, vae]")
         parser.add_argument("--ae_weight_kl", type=float, default=0.01,
                             help="Weight for KL loss if vae is used")
         parser.add_argument("--latent_size", type=int, default=512)
         parser.add_argument("--projection_size", type=int, default=256)
-        parser.add_argument("--ae_lr", type=float, default=1e-3)
+        parser.add_argument("--ae_lr", type=float, default=0.001)
         parser.add_argument("--ae_weight_decay", type=float, default=1e-4)
         parser.add_argument("--ae_momentum", type=float, default=0.9)
-        parser.add_argument("--ae_drop_p", type=float, default=0.2)
+        parser.add_argument("--ae_drop_p", type=float, default=0)
         parser.add_argument("--recon_loss_criterion", type=str, default="mse",
                             help="Reconstruction loss criterion, options: [none, mse, l1, bce]") 
-        parser.add_argument("--cont_align_loss_criterion", type=str, default="barlowtwins", help="contrastive alignment loss to use, options: none, simclr, clip, barlowtwins, ntxent, simsiam")
+        parser.add_argument("--cont_align_loss_criterion", type=str, default="clip", help="contrastive alignment loss to use, options: none, simclr, clip, barlowtwins, ntxent, simsiam")
         parser.add_argument("--cont_noise_loss_criterion", type=str, default="barlowtwins", help="contrastive noise loss to use, options: none, clip, barlowtwins, ntxent")
         parser.add_argument("--add_cont_type_loss", default=False, type=lambda x: (str(x).lower() == 'true')
                             , help="Add cancer type wise contrastive loss")
@@ -202,7 +202,7 @@ class AutoEncoder(pl.LightningModule):
         parser.add_argument("--cont_align_loss_latent", type=str, default="masked", help="the latent representation on which contrastive alignment loss should be computed, options=['masked', 'unmasked', 'mean']")
         parser.add_argument("--add_distance_loss_to_latent", default=False, type=lambda x: (str(x).lower() == 'true'))
         parser.add_argument("--add_distance_loss_to_proj", default=False, type=lambda x: (str(x).lower() == 'true'), help="works only when a constrastive loss is used")
-        parser.add_argument("--distance_loss_weight", type=float, default=0.5)
+        parser.add_argument("--distance_loss_weight", type=float, default=0.1)
         parser.add_argument("--distance_loss_criterion", type=str, default="mse", help="distance loss to use, options: mse, bce, l1")
         parser.add_argument("--add_consistency_loss", default=False, type=lambda x: (str(x).lower() == 'true'), help="add consistency loss")
         parser.add_argument("--consistency_loss_weight", type=float, default=10.0)
@@ -235,7 +235,7 @@ class AutoEncoder(pl.LightningModule):
                                 help='if True, ratio_mask_C of C are masked')
         parser.add_argument('--ratio_mask_C', type=float, default=0.0,
                                 help='ratio of C to mask')
-        parser.add_argument('--masking_method', type=str, default='zero',
+        parser.add_argument('--masking_method', type=str, default='gaussian_noise',
                                 help='method to mask data, can be "zero", "gaussian_noise", or "swap_noise"')
         parser.add_argument('--choose_masking_method_every_epoch', default=False, type=lambda x: (str(x).lower() == 'true'),
                                 help='if True, the masking method is chosen randomly each epoch and "masking_method" argument is ignored')
@@ -757,7 +757,7 @@ class DownstreamModel(pl.LightningModule):
     @staticmethod
     def add_model_specific_args(parent_parser):
         parser = parent_parser.add_argument_group("Classifier")
-        parser.add_argument("--ds_drop_p", type=float, default=0.2)
+        parser.add_argument("--ds_drop_p", type=float, default=0)
         parser.add_argument("--num_classes", type=int, default=34)
         parser.add_argument("--ds_lr", type=float, default=1e-4)
         parser.add_argument("--ds_weight_decay", type=float, default=1e-4)
@@ -768,7 +768,7 @@ class DownstreamModel(pl.LightningModule):
                             help='Number of epoch to linearly decay learning rate to zero (lr_policy == linear)')
         parser.add_argument('--ds_decay_step_size', type=int, default=50,
                             help='The original learning rate multiply by a gamma every decay_step_size epoch (lr_policy == step)')
-        parser.add_argument("--cl_loss", type=str, default="wbce", help="Loss function to use. Options: wbce, bce")
+        parser.add_argument("--cl_loss", type=str, default="bce", help="Loss function to use. Options: wbce, bce")
         parser.add_argument("--ds_task", type=str, default='class', 
                             help='downstream task, options: class (classification like cancer type classification), surv (survival analysis), reg (regression like age prediction), multi (multi-task training of all 3 tasks together)')
         parser.add_argument("--ds_k_class", type=float, default=1.0, help="Weight for classification loss in multi-task training")
@@ -777,7 +777,7 @@ class DownstreamModel(pl.LightningModule):
         parser.add_argument('--survival_loss', type=str, default='MTLR', help='choose the survival loss')
         parser.add_argument('--survival_T_max', type=float, default=-1, help='maximum T value for survival prediction task')
         parser.add_argument('--time_num', type=int, default=256, help='number of time intervals in the survival model')
-        parser.add_argument('--ds_latent_agg_method', type=str, default='mean',
+        parser.add_argument('--ds_latent_agg_method', type=str, default='concat',
                                 help='method to aggregate latent representations from autoencoders of A, B and C, options: "mean", "concat", "concat_and_mean", "concatpw" (concat pointwise), "concatpw_with_mean", "sum", "all" (pass all latents one by one)')
         parser.add_argument('--ds_save_latent_pred', default=False, type=lambda x: (str(x).lower() == 'true'),
                                 help='whether to save the latent representations of the prediction dataset')
