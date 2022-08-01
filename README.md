@@ -7,6 +7,7 @@
 To create a conda environment using the environment file given, run the command given below:
 ```
 conda env create -f environment.yml
+conda activate self-omics
 ```
 
 ## Prepare data
