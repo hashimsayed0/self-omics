@@ -2,7 +2,7 @@ method: grid
 metric:
   goal: maximize
   name: test_accuracy
-name: old_tune
+name: comics
 parameters:
   add_distance_loss_to_latent:
     values:
@@ -11,14 +11,6 @@ parameters:
   # add_distance_loss_to_proj:
   #   values:
   #     - "True"
-  # add_MMD_loss:
-  #   values:
-  #     - "True"
-  # MMD_loss_weight:
-  #   values:
-  #     - "0.3"
-  #     - "0.1"
-  #     - "0.0"
   ae_dim_1A:
     values:
       - "128"
@@ -50,7 +42,7 @@ parameters:
       # - "False"
   choose_masking_method_every_epoch:
     values:
-      - "True"
+      # - "True"
       - "False"
   cl_loss:
     values:
@@ -70,6 +62,11 @@ parameters:
   cont_loss_temp:
     values:
       - "0.1"
+  cont_noise_loss_weight:
+    values:
+      # - "0.1"
+      - "0.5"
+      # - "1.0"
   cont_align_loss_weight:
     values:
       # - "0.5"
@@ -78,6 +75,7 @@ parameters:
     values:
       # - "unmasked"
       - "masked"
+      # - "mean"
   # cont_loss_lambda:
   #   values:
   #     - "0.01"
@@ -96,9 +94,9 @@ parameters:
   #   values:
   #     - l1
   #     - bce
-  downstream_max_epochs:
-    values:
-      - "150"
+  # downstream_max_epochs:
+  #   values:
+  #     - "200"
   ds_drop_p:
     values:
       - "0.0"
@@ -106,7 +104,7 @@ parameters:
   ds_latent_agg_method:
     values:
       - sum
-      - concat
+      # - concat
   # ds_lr:
   #   values:
   #     - "0.001"
@@ -115,7 +113,7 @@ parameters:
       - class
   exp_name:
     values:
-      - old_tune
+      - comics
   fold_idx:
     values:
       - "0"
@@ -129,8 +127,6 @@ parameters:
   latent_size:
     values:
       - "512"
-      - "1024"
-      - "2048"
   mask_A:
     values:
       - "True"
@@ -138,44 +134,68 @@ parameters:
     values:
       - gaussian_noise
       # - zero
+      # - swap_noise
   num_mask_A:
     values:
       # - "18"
       - "19"
       # - "20"
       # - "21"
+  mask_B:
+    values:
+      # - "True"
+      - "False"
+  num_mask_B:
+    values:
+      - "19" 
+  mask_C:
+    values:
+      # - "True"
+      - "False"
+  ratio_mask_C:
+    values:
+      - "0.75"
   num_workers:
     value: "4"
-  pretraining_max_epochs:
-    values:
-      # - "15"
-      # - "25"
-      # - "100"
-      - "50"
+  # pretraining_max_epochs:
+  #   values:
+  #     # - "15"
+  #     # - "25"
+  #     - "100"
+  #     - "50"
   #     - "200"
   recon_all_thrice:
     value: "True"
   # seed:
   #   values:
+  #     - "42"
   #     - "14"
   #     - "7"
-  #     - "6"
-  #     - "10"
+      # - "10"
   split_A:
     value: "True"
   split_B:
     values:
       - "True"
-  # use_one_encoder:
-  #   values: 
-  #     - "True"
-  #     - "False"
-  # use_one_decoder:
-  #   values: 
-  #     - "True"
-      # - "False"
   use_sample_list:
     value: "True"
   use_test_as_val_for_downstream:
     value: "True"
+  pretraining_max_epochs:
+    values:
+      - "25"
+      - "50"
+  downstream_max_epochs:
+    values:
+      - "20"
+      - "40"
+  comics_max_epochs:
+    values:
+      # - "100"
+      - "150"
+  cs_pretext_weight:
+    values:
+      - "0.01"
+      - "0.1"
+      - "0.001"
 program: train.py

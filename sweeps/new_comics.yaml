@@ -2,7 +2,7 @@ method: grid
 metric:
   goal: maximize
   name: test_accuracy
-name: old_tune
+name: new_comics_k_fold
 parameters:
   add_distance_loss_to_latent:
     values:
@@ -11,14 +11,6 @@ parameters:
   # add_distance_loss_to_proj:
   #   values:
   #     - "True"
-  # add_MMD_loss:
-  #   values:
-  #     - "True"
-  # MMD_loss_weight:
-  #   values:
-  #     - "0.3"
-  #     - "0.1"
-  #     - "0.0"
   ae_dim_1A:
     values:
       - "128"
@@ -26,16 +18,9 @@ parameters:
     values:
       - "0.0"
       # - "0.2"
-  ae_lr:
-    values:
-      - "0.001"
-      # - "0.0001"
   ae_net:
     values:
       - ae
-  ae_use_lrscheduler:
-    values:
-      - "False"
   auto_lr_find:
     value: "True"
   auto_scale_batch_size:
@@ -50,7 +35,7 @@ parameters:
       # - "False"
   choose_masking_method_every_epoch:
     values:
-      - "True"
+      # - "True"
       - "False"
   cl_loss:
     values:
@@ -60,29 +45,50 @@ parameters:
   #     - "True"
   cont_align_loss_criterion:
     values:
-      - barlowtwins
-      # - clip
+      # - barlowtwins
+      - clip
   cont_noise_loss_criterion:
     values:
       # - barlowtwins
-      # - clip
-      - "none"
+      - clip
+      # - "none"
   cont_loss_temp:
     values:
       - "0.1"
+  cont_noise_loss_weight:
+    values:
+      # - "0.1"
+      - "0.5"
+      # - "1.0"
   cont_align_loss_weight:
     values:
-      # - "0.5"
-      - "1.0"
+      - "0.5"
+      # - "1.0"
   cont_align_loss_latent:
     values:
       # - "unmasked"
       - "masked"
+      # - "mean"
   # cont_loss_lambda:
   #   values:
   #     - "0.01"
   #     - "0.001"
   #     - "0.005"
+  cs_p1_max_epochs:
+    values: 
+      - "50"
+      # - "0"
+  cs_p2_max_epochs:
+    values:
+      # - "0"
+      - "15"
+      # - "50"
+  cs_pretext_weight:
+    values:
+      # - "1.0"
+      - "0.1"
+      # - "0.5"
+      # - "0.0"
   data_dir:
     values:
       - ./data/ABC_inter/Normalized
@@ -96,17 +102,18 @@ parameters:
   #   values:
   #     - l1
   #     - bce
-  downstream_max_epochs:
-    values:
-      - "150"
+  # downstream_max_epochs:
+  #   values:
+  #     - "200"
   ds_drop_p:
     values:
       - "0.0"
       # - "0.2"
   ds_latent_agg_method:
     values:
+      # - mean
       - sum
-      - concat
+      # - concat
   # ds_lr:
   #   values:
   #     - "0.001"
@@ -115,67 +122,82 @@ parameters:
       - class
   exp_name:
     values:
-      - old_tune
+      - new_comics_k_fold
   fold_idx:
     values:
       - "0"
-      # - "1"
-      # - "2"
-      # - "3"
-      # - "4"
+      - "1"
+      - "2"
+      - "3"
+      - "4"
   gpus:
     values:
       - "-1"
   latent_size:
     values:
       - "512"
-      - "1024"
-      - "2048"
   mask_A:
     values:
       - "True"
   masking_method:
     values:
-      - gaussian_noise
-      # - zero
+      # - gaussian_noise
+      - zero
+      # - swap_noise
   num_mask_A:
     values:
       # - "18"
       - "19"
       # - "20"
       # - "21"
-  num_workers:
-    value: "4"
-  pretraining_max_epochs:
+  mask_B:
     values:
-      # - "15"
-      # - "25"
-      # - "100"
-      - "50"
+      # - "True"
+      - "False"
+  num_mask_B:
+    values:
+      - "19" 
+  mask_C:
+    values:
+      # - "True"
+      - "False"
+  ratio_mask_C:
+    values:
+      - "0.75"
+  num_workers:
+    value: "3"
+  # pretraining_max_epochs:
+  #   values:
+  #     # - "15"
+  #     # - "25"
+  #     - "100"
+  #     - "50"
   #     - "200"
+  # p2_data_ratio:
+  #   values:
+  #     - "0.1"
+  #     - "0.05"
+  #     - "0.01"
+  # p3_data_ratio:
+  #   values:
+  #     - "0.05"
+  #     - "0.1"
   recon_all_thrice:
     value: "True"
-  # seed:
-  #   values:
-  #     - "14"
-  #     - "7"
-  #     - "6"
-  #     - "10"
+  seed:
+    values:
+      - "42"
+      # - "14"
+      # - "7"
+      # - "10"
   split_A:
     value: "True"
   split_B:
     values:
       - "True"
-  # use_one_encoder:
-  #   values: 
-  #     - "True"
-  #     - "False"
-  # use_one_decoder:
-  #   values: 
-  #     - "True"
-      # - "False"
   use_sample_list:
     value: "True"
   use_test_as_val_for_downstream:
     value: "True"
-program: train.py
+  
+program: train_in_phases.py

@@ -6,6 +6,7 @@ wandb
 images
 catboost_info/
 lightning_logs/
+latents/
 
 
 # Byte-compiled / optimized / DLL files
