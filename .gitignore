@@ -7,6 +7,7 @@ images
 catboost_info/
 lightning_logs/
 latents/
+notebooks/preprocessing.ipynb
 
 
 # Byte-compiled / optimized / DLL files
