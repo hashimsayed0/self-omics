@@ -1,5 +1,5 @@
 # Folders
-data/
+data/*
 checkpoints/
 wandb
 images
@@ -9,6 +9,8 @@ latents/
 
 # Don't ignore
 !data/sample_list.tsv
+!data/tumour_index.csv
+!data/labels.tsv
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
