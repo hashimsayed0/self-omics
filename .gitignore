@@ -7,6 +7,10 @@ catboost_info/
 lightning_logs/
 latents/
 
+anno/A_anno2.txt
+anno/gene exp gene_list.txt
+anno/genes_without_version.txt
+
 # Don't ignore
 !data/sample_list.tsv
 !data/tumour_index.csv
