@@ -1,12 +1,16 @@
 # Folders
-data/
-anno/
+data/*
 checkpoints/
 wandb
 images
 catboost_info/
 lightning_logs/
+latents/
 
+# Don't ignore
+!data/sample_list.tsv
+!data/tumour_index.csv
+!data/labels.tsv
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

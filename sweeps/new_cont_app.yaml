@@ -2,7 +2,7 @@ method: grid
 metric:
   goal: maximize
   name: test_accuracy
-name: new_cont_k_fold
+name: semi_sup_cancer_types
 parameters:
   add_distance_loss_to_latent:
     values:
@@ -42,8 +42,8 @@ parameters:
       # - "False"
   choose_masking_method_every_epoch:
     values:
-      # - "True"
-      - "False"
+      - "True"
+      # - "False"
   cl_loss:
     values:
       - bce
@@ -54,10 +54,12 @@ parameters:
     values:
       # - barlowtwins
       - clip
+      # - none
   cont_noise_loss_criterion:
     values:
-      # - barlowtwins
-      - clip
+      - barlowtwins
+      # - clip
+      # - none
   cont_loss_temp:
     values:
       - "0.1"
@@ -83,6 +85,10 @@ parameters:
   data_dir:
     values:
       - ./data/ABC_inter/Normalized
+  deterministic:
+    values:
+      - "True"
+      # - "False"
   distance_loss_weight:
     values:
       # - "1.0"
@@ -96,14 +102,30 @@ parameters:
   # downstream_max_epochs:
   #   values:
   #     - "200"
+  # downstream_data_ratio:
+  #   values:
+  #     - "0.01"
+  #     - "0.05"
+  #     - "0.1"
+  #     - "0.2"
+  #     - "0.5"
+  #     - "1.0"
   ds_drop_p:
     values:
       - "0.0"
       # - "0.2"
+  ds_freeze_ae:
+    values:
+      - "True"
+      # - "False"
   ds_latent_agg_method:
     values:
-      - sum
-      # - concat
+      # - mean
+      # - sum
+      - concat
+      # - "concat_and_mean"
+      # - "concatpw"
+      # - "concatpw_with_mean"
   # ds_lr:
   #   values:
   #     - "0.001"
@@ -112,14 +134,14 @@ parameters:
       - class
   exp_name:
     values:
-      - new_cont_k_fold
+      - semi_sup_cancer_types
   fold_idx:
     values:
       - "0"
-      - "1"
-      - "2"
-      - "3"
-      - "4"
+      # - "1"
+      # - "2"
+      # - "3"
+      # - "4"
   gpus:
     values:
       - "-1"
@@ -129,6 +151,7 @@ parameters:
   mask_A:
     values:
       - "True"
+      # - "False"
   masking_method:
     values:
       # - gaussian_noise
@@ -156,28 +179,49 @@ parameters:
       - "0.75"
   num_workers:
     value: "4"
-  # pretraining_max_epochs:
-  #   values:
+  pretraining_max_epochs:
+    values:
   #     # - "15"
   #     # - "25"
-  #     - "100"
-  #     - "50"
+      - "100"
+      # - "50"
+      - "0"
+      # - "15"
+      # - "25"
   #     - "200"
   recon_all_thrice:
     value: "True"
-  seed:
+  recon_loss_criterion:
     values:
-      - "42"
-      - "14"
-      - "7"
+      - "mse"
+  #     - "bce"
+  #     - "l1"
+  # seed:
+  #   values:
+  #     - "42"
+  #     - "14"
+  #     - "7"
       # - "10"
   split_A:
     value: "True"
   split_B:
     values:
       - "True"
+  train_downstream_on_some_types:
+    values:
+      - "True"
+      # - "False"
+  downstream_cancer_types:
+    values:
+      - "1_least_common"
+      - "3_least_common"
+      - "5_least_common"
+      - "10_least_common"
+      - "20_least_common"
+      - "25_least_common"
+      - "all"
   use_sample_list:
     value: "True"
-  use_test_as_val_for_downstream:
-    value: "True"
+  # use_test_as_val_for_downstream:
+  #   value: "True"
 program: train.py

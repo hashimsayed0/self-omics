@@ -1,0 +1,203 @@
+method: grid
+metric:
+  goal: maximize
+  name: test_accuracy
+name: new_comics_k_fold
+parameters:
+  add_distance_loss_to_latent:
+    values:
+      # - "False"
+      - "True"
+  # add_distance_loss_to_proj:
+  #   values:
+  #     - "True"
+  ae_dim_1A:
+    values:
+      - "128"
+  ae_drop_p:
+    values:
+      - "0.0"
+      # - "0.2"
+  ae_net:
+    values:
+      - ae
+  auto_lr_find:
+    value: "True"
+  auto_scale_batch_size:
+    values:
+      - binsearch
+  batch_size:
+    values:
+      - "512"
+  change_ch_to_mask_every_epoch:
+    values:
+      - "True"
+      # - "False"
+  choose_masking_method_every_epoch:
+    values:
+      # - "True"
+      - "False"
+  cl_loss:
+    values:
+      - bce
+  # concat_latent_for_decoder:
+  #   values:
+  #     - "True"
+  cont_align_loss_criterion:
+    values:
+      # - barlowtwins
+      - clip
+  cont_noise_loss_criterion:
+    values:
+      # - barlowtwins
+      - clip
+      # - "none"
+  cont_loss_temp:
+    values:
+      - "0.1"
+  cont_noise_loss_weight:
+    values:
+      # - "0.1"
+      - "0.5"
+      # - "1.0"
+  cont_align_loss_weight:
+    values:
+      - "0.5"
+      # - "1.0"
+  cont_align_loss_latent:
+    values:
+      # - "unmasked"
+      - "masked"
+      # - "mean"
+  # cont_loss_lambda:
+  #   values:
+  #     - "0.01"
+  #     - "0.001"
+  #     - "0.005"
+  cs_p1_max_epochs:
+    values: 
+      - "50"
+      # - "0"
+  cs_p2_max_epochs:
+    values:
+      # - "0"
+      - "15"
+      # - "50"
+  cs_pretext_weight:
+    values:
+      # - "1.0"
+      - "0.1"
+      # - "0.5"
+      # - "0.0"
+  data_dir:
+    values:
+      - ./data/ABC_inter/Normalized
+  distance_loss_weight:
+    values:
+      # - "1.0"
+      # - "0.5"
+      - "0.1"
+      # - "0.01"
+  # distance_loss_criterion:
+  #   values:
+  #     - l1
+  #     - bce
+  # downstream_max_epochs:
+  #   values:
+  #     - "200"
+  ds_drop_p:
+    values:
+      - "0.0"
+      # - "0.2"
+  ds_latent_agg_method:
+    values:
+      # - mean
+      - sum
+      # - concat
+  # ds_lr:
+  #   values:
+  #     - "0.001"
+  ds_task:
+    values:
+      - class
+  exp_name:
+    values:
+      - new_comics_k_fold
+  fold_idx:
+    values:
+      - "0"
+      - "1"
+      - "2"
+      - "3"
+      - "4"
+  gpus:
+    values:
+      - "-1"
+  latent_size:
+    values:
+      - "512"
+  mask_A:
+    values:
+      - "True"
+  masking_method:
+    values:
+      # - gaussian_noise
+      - zero
+      # - swap_noise
+  num_mask_A:
+    values:
+      # - "18"
+      - "19"
+      # - "20"
+      # - "21"
+  mask_B:
+    values:
+      # - "True"
+      - "False"
+  num_mask_B:
+    values:
+      - "19" 
+  mask_C:
+    values:
+      # - "True"
+      - "False"
+  ratio_mask_C:
+    values:
+      - "0.75"
+  num_workers:
+    value: "3"
+  # pretraining_max_epochs:
+  #   values:
+  #     # - "15"
+  #     # - "25"
+  #     - "100"
+  #     - "50"
+  #     - "200"
+  # p2_data_ratio:
+  #   values:
+  #     - "0.1"
+  #     - "0.05"
+  #     - "0.01"
+  # p3_data_ratio:
+  #   values:
+  #     - "0.05"
+  #     - "0.1"
+  recon_all_thrice:
+    value: "True"
+  seed:
+    values:
+      - "42"
+      # - "14"
+      # - "7"
+      # - "10"
+  split_A:
+    value: "True"
+  split_B:
+    values:
+      - "True"
+  use_sample_list:
+    value: "True"
+  use_test_as_val_for_downstream:
+    value: "True"
+  
+program: train_in_phases.py

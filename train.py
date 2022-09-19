@@ -22,15 +22,22 @@ if param.load_pretrained_ae:
     ae_model_path = param.pretrained_ae_path
 else:
     A_shape, B_shape, C_shape = util.compute_input_shapes(abc_dm)
-    ae_trainer = Trainer.from_argparse_args(param, callbacks=[early_stopping, model_checkpoint], logger=[csv_logger, wandb_logger])
-    ae = lit_models.AutoEncoder(A_shape, B_shape, C_shape, **vars(param))
-    abc_dm.mode = 'downstream'
-    ae_trainer.fit(ae, abc_dm)
-    ae_model_path = model_checkpoint.best_model_path
-    # wandb.finish()
+    if param.pretraining_max_epochs > 0:
+        ae_trainer = Trainer.from_argparse_args(param, callbacks=[early_stopping, model_checkpoint], logger=[csv_logger, wandb_logger])
+        ae = lit_models.AutoEncoder(A_shape, B_shape, C_shape, **vars(param))
+        ae_trainer.fit(ae, abc_dm)
+        ae_model_path = model_checkpoint.best_model_path
+        # wandb.finish()
+    else:
+        ae_model_path = None
     
 early_stopping, model_checkpoint, csv_logger = util.define_callbacks_loggers_downstream(param, checkpoint_path, fold)
-classifier = lit_models.DownstreamModel(ae_model_path, abc_dm.class_weights, **vars(param))
+classifier = lit_models.DownstreamModel(ae_model_path, A_shape, B_shape, C_shape, abc_dm.class_weights, **vars(param))
 classifier_trainer = Trainer.from_argparse_args(param, callbacks=[early_stopping, model_checkpoint], logger=[csv_logger, wandb_logger])
+abc_dm.mode = 'downstream'
 classifier_trainer.fit(classifier, abc_dm)
-classifier_trainer.test(datamodule=abc_dm, ckpt_path='best')
+wandb.config.update({'ds_model_path': model_checkpoint.best_model_path}, allow_val_change=True)
+if param.downstream_max_epochs > 0:
+    classifier_trainer.test(datamodule=abc_dm, ckpt_path='best')
+else:
+    classifier_trainer.test(model=classifier, datamodule=abc_dm)
