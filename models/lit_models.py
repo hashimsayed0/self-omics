@@ -597,52 +597,7 @@ class AutoEncoder(pl.LightningModule):
         cons_loss += self.cons_loss(h_C_recon_using_dec_B, h_B)
         return logs, cons_loss
     
-    def training_step(self, batch, batch_idx):
-        if self.ae_net == 'ae':
-            logs, h, pretext_loss = self.ae_step(batch) 
-        elif self.ae_net == 'vae':
-            logs, h, pretext_loss = self.vae_step(batch)
-        for k, v in logs.items():
-            self.log(k, v, on_step=False, on_epoch=True)
-        if self.add_distance_loss_to_latent:
-            logs, dist_loss = self.dist_step(h)
-            pretext_loss += dist_loss * self.distance_loss_weight
-            self.log('{}_dist_loss_btw_latent'.format(self.mode), dist_loss, on_step=False, on_epoch=True)
-        if self.add_consistency_loss:
-            logs, cons_loss = self.cons_step(h)
-            pretext_loss += cons_loss * self.consistency_loss_weight
-            self.log('{}_cons_loss'.format(self.mode), cons_loss, on_step=False, on_epoch=True)
-        if self.hparams.add_MMD_loss:
-            logs, MMD_loss = self.MMD_step(h)
-            pretext_loss += MMD_loss * self.hparams.MMD_loss_weight
-            self.log('{}_MMD_loss'.format(self.mode), MMD_loss, on_step=False, on_epoch=True)
-        if self.hparams.add_latent_reconstruction_loss:
-            logs, latent_recon_loss = self.latent_recon_step(h)
-            pretext_loss += latent_recon_loss * self.hparams.latent_reconstruction_loss_weight
-            self.log('{}_latent_recon_loss'.format(self.mode), latent_recon_loss, on_step=False, on_epoch=True)
-        if self.cont_align_loss_criterion != "none":
-            if self.cont_align_loss_criterion in ['barlowtwins', 'clip'] or h[0].shape[0] == self.batch_size:
-                self.cont_pair = 'align'
-                logs, cont_loss = self.cont_align_step(h)
-                for k, v in logs.items():
-                    self.log(k, v, on_step=False, on_epoch=True)
-                pretext_loss += self.cont_align_loss_weight * cont_loss
-                if self.add_cont_type_loss:
-                    h_list = self.prepare_cont_type_h(h, batch['y'])
-                    for i, h_type in enumerate(h_list):
-                        self.cont_pair = 'align_type'
-                        logs, cont_loss = self.cont_align_step(h_type)
-                        for k, v in logs.items():
-                            self.log(k, v, on_step=False, on_epoch=True)
-                        pretext_loss += self.cont_align_loss_weight * cont_loss
-        self.log('{}_pretext_loss'.format(self.mode), pretext_loss, on_step=False, on_epoch=True)
-        return pretext_loss
-    
-    def validation_step(self, batch, batch_idx):
-        # if self.global_step == 0: 
-        #     wandb.define_metric('val_pretext_loss', summary='min')
-        #     wandb.define_metric('val_recon_loss', summary='min')
-        self.mode = 'val'
+    def _shared_step(self, batch, batch_idx):
         pretext_loss = 0
         if self.ae_net == 'ae':
             logs, h, recon_loss = self.ae_step(batch) 
@@ -681,12 +636,106 @@ class AutoEncoder(pl.LightningModule):
                         pretext_loss += self.cont_align_loss_weight * cont_loss
             logs.update(cont_logs)
         logs['{}_pretext_loss'.format(self.mode)] = pretext_loss
-        return logs
+        for k, v in logs.items():
+            self.log(k, v, on_step=False, on_epoch=True)
 
-    def validation_epoch_end(self, outputs):
-        for key, value in outputs[0].items():
-            avg = torch.stack([x[key] for x in outputs if key in x.keys()]).mean()
-            self.log(key, avg)
+    def training_step(self, batch, batch_idx):
+        return self._shared_step(batch, batch_idx)
+    
+    def validation_step(self, batch, batch_idx):
+        return self._shared_step(batch, batch_idx)
+
+
+    # def training_step(self, batch, batch_idx):
+    #     if self.ae_net == 'ae':
+    #         logs, h, pretext_loss = self.ae_step(batch) 
+    #     elif self.ae_net == 'vae':
+    #         logs, h, pretext_loss = self.vae_step(batch)
+    #     for k, v in logs.items():
+    #         self.log(k, v, on_step=False, on_epoch=True)
+    #     if self.add_distance_loss_to_latent:
+    #         logs, dist_loss = self.dist_step(h)
+    #         pretext_loss += dist_loss * self.distance_loss_weight
+    #         self.log('{}_dist_loss_btw_latent'.format(self.mode), dist_loss, on_step=False, on_epoch=True)
+    #     if self.add_consistency_loss:
+    #         logs, cons_loss = self.cons_step(h)
+    #         pretext_loss += cons_loss * self.consistency_loss_weight
+    #         self.log('{}_cons_loss'.format(self.mode), cons_loss, on_step=False, on_epoch=True)
+    #     if self.hparams.add_MMD_loss:
+    #         logs, MMD_loss = self.MMD_step(h)
+    #         pretext_loss += MMD_loss * self.hparams.MMD_loss_weight
+    #         self.log('{}_MMD_loss'.format(self.mode), MMD_loss, on_step=False, on_epoch=True)
+    #     if self.hparams.add_latent_reconstruction_loss:
+    #         logs, latent_recon_loss = self.latent_recon_step(h)
+    #         pretext_loss += latent_recon_loss * self.hparams.latent_reconstruction_loss_weight
+    #         self.log('{}_latent_recon_loss'.format(self.mode), latent_recon_loss, on_step=False, on_epoch=True)
+    #     if self.cont_align_loss_criterion != "none":
+    #         if self.cont_align_loss_criterion in ['barlowtwins', 'clip'] or h[0].shape[0] == self.batch_size:
+    #             self.cont_pair = 'align'
+    #             logs, cont_loss = self.cont_align_step(h)
+    #             for k, v in logs.items():
+    #                 self.log(k, v, on_step=False, on_epoch=True)
+    #             pretext_loss += self.cont_align_loss_weight * cont_loss
+    #             if self.add_cont_type_loss:
+    #                 h_list = self.prepare_cont_type_h(h, batch['y'])
+    #                 for i, h_type in enumerate(h_list):
+    #                     self.cont_pair = 'align_type'
+    #                     logs, cont_loss = self.cont_align_step(h_type)
+    #                     for k, v in logs.items():
+    #                         self.log(k, v, on_step=False, on_epoch=True)
+    #                     pretext_loss += self.cont_align_loss_weight * cont_loss
+    #     self.log('{}_pretext_loss'.format(self.mode), pretext_loss, on_step=False, on_epoch=True)
+    #     return pretext_loss
+    
+    # def validation_step(self, batch, batch_idx):
+    #     # if self.global_step == 0: 
+    #     #     wandb.define_metric('val_pretext_loss', summary='min')
+    #     #     wandb.define_metric('val_recon_loss', summary='min')
+    #     self.mode = 'val'
+    #     pretext_loss = 0
+    #     if self.ae_net == 'ae':
+    #         logs, h, recon_loss = self.ae_step(batch) 
+    #     elif self.ae_net == 'vae':
+    #         logs, h, recon_loss = self.vae_step(batch)
+    #     pretext_loss += recon_loss
+    #     if self.add_distance_loss_to_latent:
+    #         _, dist_loss = self.dist_step(h)
+    #         pretext_loss += dist_loss * self.distance_loss_weight
+    #         logs['{}_dist_loss'.format(self.mode)] = dist_loss
+    #     if self.add_consistency_loss:
+    #         _, cons_loss = self.cons_step(h)
+    #         pretext_loss += cons_loss * self.consistency_loss_weight
+    #         logs['{}_cons_loss'.format(self.mode)] = cons_loss
+    #     if self.hparams.add_MMD_loss:
+    #         _, MMD_loss = self.MMD_step(h)
+    #         pretext_loss += MMD_loss * self.hparams.MMD_loss_weight
+    #         logs['{}_MMD_loss'.format(self.mode)] = MMD_loss
+    #     if self.hparams.add_latent_reconstruction_loss:
+    #         _, latent_recon_loss = self.latent_recon_step(h)
+    #         pretext_loss += latent_recon_loss * self.hparams.latent_reconstruction_loss_weight
+    #         logs['{}_latent_recon_loss'.format(self.mode)] = latent_recon_loss
+    #     if self.cont_align_loss_criterion != "none":
+    #         cont_logs = {}
+    #         if self.cont_align_loss_criterion in ['barlowtwins', 'clip'] or h[0].shape[0] == self.batch_size:
+    #             self.cont_pair = 'align'
+    #             cont_pair_logs, cont_loss = self.cont_align_step(h)
+    #             cont_logs.update(cont_pair_logs)
+    #             pretext_loss += self.cont_align_loss_weight * cont_loss
+    #             if self.add_cont_type_loss:
+    #                 h_list = self.prepare_cont_type_h(h, batch['y'])
+    #                 for i, h_type in enumerate(h_list):
+    #                     self.cont_pair = 'align_type'
+    #                     cont_pair_logs, cont_loss = self.cont_align_step(h_type)
+    #                     cont_logs.update(cont_pair_logs)
+    #                     pretext_loss += self.cont_align_loss_weight * cont_loss
+    #         logs.update(cont_logs)
+    #     logs['{}_pretext_loss'.format(self.mode)] = pretext_loss
+    #     return logs
+
+    # def validation_epoch_end(self, outputs):
+    #     for key, value in outputs[0].items():
+    #         avg = torch.stack([x[key] for x in outputs if key in x.keys()]).mean()
+    #         self.log(key, avg)
         
 
 
