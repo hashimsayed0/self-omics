@@ -638,9 +638,11 @@ class AutoEncoder(pl.LightningModule):
         logs['{}_pretext_loss'.format(self.mode)] = pretext_loss
         for k, v in logs.items():
             self.log(k, v, on_step=False, on_epoch=True)
+        return logs
 
     def training_step(self, batch, batch_idx):
-        return self._shared_step(batch, batch_idx)
+        logs = self._shared_step(batch, batch_idx)
+        return logs['{}_pretext_loss'.format(self.mode)]
     
     def validation_step(self, batch, batch_idx):
         return self._shared_step(batch, batch_idx)
