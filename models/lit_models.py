@@ -25,7 +25,7 @@ import os
 import string
 
 class AutoEncoder(pl.LightningModule):
-    def __init__(self, ABC_shapes, ae_net, ae_weight_kl, latent_size, projection_size, ae_lr, ae_weight_decay, ae_momentum, ae_drop_p, ae_beta1, ae_lr_policy, ae_epoch_num_decay, ae_decay_step_size, max_epochs, cont_align_loss_criterion, cont_loss_temp, cont_loss_lambda, ae_optimizer, ae_use_lrscheduler, cont_align_loss_weight, split_A, split_B, mask_A, mask_B, num_mask_A, num_mask_B, masking_method, batch_size, ae_dim_1B, ae_dim_2B, ae_dim_1A, ae_dim_2A, ae_dim_1C, ae_dim_2C, **config):
+    def __init__(self, ABC_shapes, ae_net, ae_weight_kl, latent_size, projection_size, ae_lr, ae_weight_decay, ae_momentum, ae_drop_p, ae_beta1, ae_lr_policy, ae_epoch_num_decay, ae_decay_step_size, max_epochs, cont_align_loss_criterion, cont_loss_temp, cont_loss_lambda, ae_optimizer, ae_use_lrscheduler, cont_align_loss_weight, split_A, split_B, mask_A, mask_B, num_mask_A, num_mask_B, masking_method, batch_size, ae_dim_2B, ae_dim_2A, ae_dim_1C, ae_dim_2C, **config):
         super(AutoEncoder, self).__init__()
         self.batch_size = batch_size
         self.ae_net = ae_net
@@ -119,7 +119,7 @@ class AutoEncoder(pl.LightningModule):
                     self.ae_dim_2 = ae_dim_2B
                 elif self.omics_types == 'c':
                     self.input_size = self.input_size_C
-                    self.ae_dim_1 = 1024
+                    self.ae_dim_1 = ae_dim_1C
                     self.ae_dim_2 = ae_dim_2C
                 self.ae = AE_SingleOmics(self.input_size, self.latent_size, dropout_p=ae_drop_p, dim_1=self.ae_dim_1, dim_2=self.ae_dim_2)
                 
@@ -252,10 +252,8 @@ class AutoEncoder(pl.LightningModule):
         parser.add_argument('--ae_epoch_num_decay', type=int, default=50,
                             help='Number of epoch to linearly decay learning rate to zero (lr_policy == linear)')
         parser.add_argument('--ae_decay_step_size', type=int, default=50,
-                            help='The original learning rate multiply by a gamma every decay_step_size epoch (lr_policy == step)')
-        parser.add_argument("--ae_dim_1B", type=int, default=128)
+                            help='The original learning rate multiply by a gamma every decay_step_size epoch (lr_policy == step)') 
         parser.add_argument("--ae_dim_2B", type=int, default=1024)
-        parser.add_argument("--ae_dim_1A", type=int, default=2048)
         parser.add_argument("--ae_dim_2A", type=int, default=1024)
         parser.add_argument("--ae_dim_1C", type=int, default=1024)
         parser.add_argument("--ae_dim_2C", type=int, default=1024)

@@ -187,9 +187,9 @@ parameters:
   pretraining_max_epochs:
     values:
   #     # - "15"
-  #     # - "25"
+      - "30"
       - "100"
-      # - "50"
+      - "50"
       # - "0"
       # - "15"
       # - "25"
