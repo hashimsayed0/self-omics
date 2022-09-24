@@ -1,3 +1,4 @@
+from email.policy import default
 from pytorch_lightning import LightningDataModule
 import os
 import numpy as np
@@ -11,7 +12,7 @@ from sklearn.utils import class_weight
 import torch
 from wandb import wandb
 
-class ABCDataModule(LightningDataModule):
+class OmicsDataModule(LightningDataModule):
     def __init__(self, current_fold, num_folds, seed, data_dir, use_sample_list, batch_size, val_ratio, num_workers, split_A, split_B, feature_selection, feature_selection_alpha, feature_selection_percentile, **config):
         super().__init__()
         self.current_fold = current_fold
@@ -55,6 +56,18 @@ class ABCDataModule(LightningDataModule):
         self.downstream_cancer_types = config['downstream_cancer_types']
         self.pretraining_data_ratio = config['pretraining_data_ratio']
         self.downstream_data_ratio = config['downstream_data_ratio']
+        self.omics_types = config['omics_types']
+        if self.omics_types == 'abc':
+            self.use_a, self.use_b, self.use_c = True, True, True
+        elif self.omics_types == 'a':
+            self.use_a, self.use_b, self.use_c = True, False, False
+            self.B_df, self.C_df = None, None
+        elif self.omics_types == 'b':
+            self.use_a, self.use_b, self.use_c = False, True, False
+            self.A_df, self.C_df = None, None
+        elif self.omics_types == 'c':
+            self.use_a, self.use_b, self.use_c = False, False, True
+            self.A_df, self.B_df = None, None
         # self.save_hyperparameters()
         self.load_data()
         self.preprocess_data()
@@ -66,6 +79,8 @@ class ABCDataModule(LightningDataModule):
                             help="directory containing the dataset")
         parser.add_argument('--data_format', type=str, default='npy',
                             help='the format in which data is stored, options: [npy, tsv]')
+        parser.add_argument('--omics_types', type=str, default='abc',
+                            help='the omics types to be used, options: [abc, a, b, c], where "a" is gene expression, "b" is DNA methylation and "c" is miRNA expression')
         parser.add_argument('--use_sample_list', default=False, type=lambda x: (str(x).lower() == 'true'),
                                 help='provide a subset sample list of the dataset, store in the path data_dir/sample_list.tsv, if False use all the samples')
         parser.add_argument('--batch_size', type=int, default=512,
@@ -107,9 +122,15 @@ class ABCDataModule(LightningDataModule):
         return parent_parser
 
     def load_data(self):
-        self.A_df = self.load_file('A')
-        self.B_df = self.load_file('B')
-        self.C_df = self.load_file('C')
+        if self.use_a:
+            self.A_df = self.load_file('A')
+            self.sample_list = self.A_df.columns
+        if self.use_b:
+            self.B_df = self.load_file('B')
+            self.sample_list = self.B_df.columns
+        if self.use_c:
+            self.C_df = self.load_file('C')
+            self.sample_list = self.C_df.columns
 
         if self.use_sample_list:
             # if self.augment_B:
@@ -118,28 +139,29 @@ class ABCDataModule(LightningDataModule):
             #     sample_list_folder = 'BC_inter'
             # else:
             #     sample_list_folder = 'ABC_inter'
-            # sample_list_path = os.path.join(self.data_dir, 'sample_lists', self.ds_task, sample_list_folder, 'sample_list.tsv')
+            # sample_list_path = os.path.join(self.data_dir, 'sample_lists', self.ds_task, sample_list_folder, 'self.sample_list.tsv')
             sample_list_path = os.path.join(self.data_dir, 'sample_list.tsv')
             print('Loading sample list from ' + sample_list_path)
-            sample_list = np.loadtxt(sample_list_path, delimiter='\t', dtype='<U32')
-        else:
-            sample_list = self.A_df.columns
+            self.sample_list = np.loadtxt(sample_list_path, delimiter='\t', dtype='<U32')
         
-        self.A_df = self.A_df.loc[:, sample_list]
-        if self.augment_A:
-            print('Augmenting A with zeros')
-            samp_min_A = list(set(sample_list).difference(set(self.A_df.columns.to_list())))
-            aug_df = pd.DataFrame(np.zeros((self.A_df.shape[0],len(samp_min_A))), columns=samp_min_A, index=self.A_df.index)
-            self.A_df = pd.concat([self.A_df, aug_df], axis=1)
+        if self.use_a:
+            self.A_df = self.A_df.loc[:, self.sample_list]
+            if self.augment_A:
+                print('Augmenting A with zeros')
+                samp_min_A = list(set(self.sample_list).difference(set(self.A_df.columns.to_list())))
+                aug_df = pd.DataFrame(np.zeros((self.A_df.shape[0],len(samp_min_A))), columns=samp_min_A, index=self.A_df.index)
+                self.A_df = pd.concat([self.A_df, aug_df], axis=1)
         
-        self.B_df = self.B_df.loc[:, sample_list]
-        if self.augment_B:
-            print('Augmenting B with zeros')
-            samp_min_B = list(set(sample_list).difference(set(self.B_df.columns.to_list())))
-            aug_df = pd.DataFrame(np.zeros((self.B_df.shape[0],len(samp_min_B))), columns=samp_min_B, index=self.B_df.index)
-            self.B_df = pd.concat([self.B_df, aug_df], axis=1)
+        if self.use_b:
+            self.B_df = self.B_df.loc[:, self.sample_list]
+            if self.augment_B:
+                print('Augmenting B with zeros')
+                samp_min_B = list(set(self.sample_list).difference(set(self.B_df.columns.to_list())))
+                aug_df = pd.DataFrame(np.zeros((self.B_df.shape[0],len(samp_min_B))), columns=samp_min_B, index=self.B_df.index)
+                self.B_df = pd.concat([self.B_df, aug_df], axis=1)
             
-        self.C_df = self.C_df.loc[:, sample_list]
+        if self.use_c:
+            self.C_df = self.C_df.loc[:, self.sample_list]
 
         self.survival_T_array = None
         self.survival_E_array = None
@@ -150,7 +172,7 @@ class ABCDataModule(LightningDataModule):
         if 'class' in self.ds_tasks:
             labels_path = os.path.join(self.data_dir, 'labels.tsv')
             self.labels = pd.read_csv(labels_path, sep='\t', header=0, index_col=0)
-            self.labels = self.labels.loc[sample_list]
+            self.labels = self.labels.loc[self.sample_list]
 
             tumour_index_path = os.path.join(self.data_dir, 'tumour_index.csv')
             self.tumour_index = pd.read_csv(tumour_index_path, index_col=0)
@@ -158,7 +180,7 @@ class ABCDataModule(LightningDataModule):
 
         if 'surv' in self.ds_tasks:
             survival_path = os.path.join(self.data_dir, 'survival.tsv')   # get the path of the survival data
-            survival_df = pd.read_csv(survival_path, sep='\t', header=0, index_col=0).loc[sample_list, :]
+            survival_df = pd.read_csv(survival_path, sep='\t', header=0, index_col=0).loc[self.sample_list, :]
             self.survival_T_array = survival_df.iloc[:, -2].astype(float).values
             self.survival_E_array = survival_df.iloc[:, -1].values
             self.survival_T_max = self.survival_T_array.max()
@@ -169,7 +191,7 @@ class ABCDataModule(LightningDataModule):
         if 'reg' in self.ds_tasks:
             values_path = os.path.join(self.data_dir, 'values.tsv')
             self.values = pd.read_csv(values_path, sep='\t', header=0, index_col=0)
-            self.values = self.values.loc[sample_list]
+            self.values = self.values.loc[self.sample_list]
         
         if self.train_downstream_on_some_types:
             if self.downstream_cancer_types == 'custom':
@@ -186,7 +208,7 @@ class ABCDataModule(LightningDataModule):
 
     def preprocess_data(self):
         kf = StratifiedKFold(n_splits=self.num_folds, shuffle=True, random_state=self.seed)
-        for i, (train_index, test_index) in enumerate(kf.split(self.C_df.T, self.labels)):
+        for i, (train_index, test_index) in enumerate(kf.split(self.sample_list, self.labels)):
             if i == self.current_fold:
                 self.train_index, self.val_index = train_test_split(train_index, test_size=self.val_ratio, random_state=self.seed, stratify=self.labels.iloc[train_index])
                 self.test_index = test_index
@@ -197,26 +219,31 @@ class ABCDataModule(LightningDataModule):
                 scaler = StandardScaler()
             elif self.data_scaler == 'minmax':
                 scaler = MinMaxScaler()
-            print('Scaling A')
-            self.A_df = scale_features(scaler, self.A_df, self.train_index, self.val_index, self.test_index)
-            print('Scaling B')
-            self.B_df = scale_features(scaler, self.B_df, self.train_index, self.val_index, self.test_index)
-            print('Scaling C')
-            self.C_df = scale_features(scaler, self.C_df, self.train_index, self.val_index, self.test_index)
+            if self.use_a:
+                print('Scaling A')
+                self.A_df = scale_features(scaler, self.A_df, self.train_index, self.val_index, self.test_index)
+            if self.use_b:
+                print('Scaling B')
+                self.B_df = scale_features(scaler, self.B_df, self.train_index, self.val_index, self.test_index)
+            if self.use_c:
+                print('Scaling C')
+                self.C_df = scale_features(scaler, self.C_df, self.train_index, self.val_index, self.test_index)
 
-        if self.split_A:
-            self.A_df, _ = self.separate_A(self.A_df)
-        if self.split_B:
-            self.B_df, _ = self.separate_B(self.B_df)
+        if self.use_a and self.split_A:
+                self.A_df, _ = self.separate_A(self.A_df)
+        if self.use_b and self.split_B:
+                self.B_df, _ = self.separate_B(self.B_df)
 
         if self.feature_selection != "none":
-            self.A_df = select_features(self.A_df, self.labels, self.train_index, self.val_index, self.test_index, self.feature_selection, self.feature_selection_alpha, self.feature_selection_percentile)
-            self.C_df = select_features(self.C_df, self.labels, self.train_index, self.val_index, self.test_index, self.feature_selection, self.feature_selection_alpha, self.feature_selection_percentile)
-            if self.split_B:
-                self.B_df_list = []
-                for B_df in self.B_df:
-                    self.B_df_list.append(select_features(B_df, self.labels, self.train_index, self.val_index, self.test_index, self.feature_selection, self.feature_selection_alpha, self.feature_selection_percentile))
-                self.B_df = self.B_df_list
+            if self.use_a:
+                self.A_df = select_features(self.A_df, self.labels, self.train_index, self.val_index, self.test_index, self.feature_selection, self.feature_selection_alpha, self.feature_selection_percentile)
+            if self.use_c:
+                self.C_df = select_features(self.C_df, self.labels, self.train_index, self.val_index, self.test_index, self.feature_selection, self.feature_selection_alpha, self.feature_selection_percentile)
+            if self.use_b and self.split_B:
+                    self.B_df_list = []
+                    for B_df in self.B_df:
+                        self.B_df_list.append(select_features(B_df, self.labels, self.train_index, self.val_index, self.test_index, self.feature_selection, self.feature_selection_alpha, self.feature_selection_percentile))
+                    self.B_df = self.B_df_list
 
         self.class_weights = self.calculate_class_weights(self.labels.iloc[self.train_index].values)
         self.labels = pd.get_dummies(self.labels.iloc[:,0])

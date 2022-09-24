@@ -15,7 +15,7 @@ util.set_seeds(param.seed)
 param.train_in_phases = True 
 config = vars(param)
 fold = param.fold_idx
-abc_dm = datamodules.ABCDataModule(fold, **config)
+abc_dm = datamodules.OmicsDataModule(fold, **config)
 checkpoint_path = os.path.join(param.checkpoints_dir, param.exp_name, 'fold-{}'.format(fold))
 
 if param.resume_training:

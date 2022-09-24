@@ -14,21 +14,31 @@ class ABCDataset(Dataset):
         self.split_B = split_B
         self.indices = indices
         self.ds_tasks = ds_tasks
+        self.use_a, self.use_b, self.use_c = False, False, False
+        if A_df is not None:
+            self.use_a = True
+        if B_df is not None:
+            self.use_b = True
+        if C_df is not None:
+            self.use_c = True
 
-        if self.split_A:
-            A_df = [A_df[ch].iloc[:, indices] for ch in range(len(A_df))]
-            self.A_tensors = [torch.tensor(A_ch.values.astype(float)).float() for A_ch in A_df]
-        else:
-            self.A_tensors = torch.tensor(A_df.values.astype(float)).float()
+        if self.use_a:
+            if self.split_A:
+                A_df = [A_df[ch].iloc[:, indices] for ch in range(len(A_df))]
+                self.A_tensors = [torch.tensor(A_ch.values.astype(float)).float() for A_ch in A_df]
+            else:
+                self.A_tensors = torch.tensor(A_df.values.astype(float)).float()
         
-        if self.split_B:
-            B_df = [B_df[ch].iloc[:, indices] for ch in range(len(B_df))]
-            self.B_tensors = [torch.tensor(B_ch.values.astype(float)).float() for B_ch in B_df]
-        else:
-            self.B_tensors = torch.tensor(B_df.values.astype(float)).float()
+        if self.use_b:
+            if self.split_B:
+                B_df = [B_df[ch].iloc[:, indices] for ch in range(len(B_df))]
+                self.B_tensors = [torch.tensor(B_ch.values.astype(float)).float() for B_ch in B_df]
+            else:
+                self.B_tensors = torch.tensor(B_df.values.astype(float)).float()
         
-        C_df = C_df.iloc[:, indices]
-        self.C_tensors = torch.tensor(C_df.values.astype(float)).float()
+        if self.use_c:
+            C_df = C_df.iloc[:, indices]
+            self.C_tensors = torch.tensor(C_df.values.astype(float)).float()
 
         if 'class' in self.ds_tasks:
             labels = labels.iloc[indices]
@@ -48,18 +58,25 @@ class ABCDataset(Dataset):
         return len(self.indices)
     
     def __getitem__(self, idx):
-        data_dict = {}
-        if self.split_A:
-            A_sample = [self.A_tensors[ch][:, idx] for ch in range(len(self.A_tensors))]
-        else:
-            A_sample = self.A_tensors[:, idx]
-        if self.split_B:
-            B_sample = [self.B_tensors[ch][:, idx] for ch in range(len(self.B_tensors))]
-        else:
-            B_sample = self.B_tensors[:, idx]
-        C_sample = self.C_tensors[:, idx]
+        data_dict = {
+            'x': []
+        }
+        if self.use_a:
+            if self.split_A:
+                A_sample = [self.A_tensors[ch][:, idx] for ch in range(len(self.A_tensors))]
+            else:
+                A_sample = self.A_tensors[:, idx]
+            data_dict['x'].append(A_sample)
+        if self.use_b:
+            if self.split_B:
+                B_sample = [self.B_tensors[ch][:, idx] for ch in range(len(self.B_tensors))]
+            else:
+                B_sample = self.B_tensors[:, idx]
+            data_dict['x'].append(B_sample)
+        if self.use_c:
+            C_sample = self.C_tensors[:, idx]
+            data_dict['x'].append(C_sample)
 
-        data_dict['x'] = (A_sample, B_sample, C_sample)
         data_dict['sample_id'] = self.sample_ids[idx]
         
         if 'class' in self.ds_tasks:

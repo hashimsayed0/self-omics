@@ -2,7 +2,7 @@ method: grid
 metric:
   goal: maximize
   name: test_accuracy
-name: semi_sup_cancer_types
+name: semi_sup_single_omics
 parameters:
   add_distance_loss_to_latent:
     values:
@@ -11,9 +11,9 @@ parameters:
   # add_distance_loss_to_proj:
   #   values:
   #     - "True"
-  ae_dim_1A:
-    values:
-      - "128"
+  # ae_dim_1A:
+  #   values:
+  #     - "128"
   ae_drop_p:
     values:
       - "0.0"
@@ -134,7 +134,7 @@ parameters:
       - class
   exp_name:
     values:
-      - semi_sup_cancer_types
+      - semi_sup_single_omics
   fold_idx:
     values:
       - "0"
@@ -179,13 +179,18 @@ parameters:
       - "0.75"
   num_workers:
     value: "4"
+  omics_types:
+    values:
+      - "a"
+      - "b"
+      - "c"
   pretraining_max_epochs:
     values:
   #     # - "15"
   #     # - "25"
       - "100"
       # - "50"
-      - "0"
+      # - "0"
       # - "15"
       # - "25"
   #     - "200"
@@ -207,19 +212,19 @@ parameters:
   split_B:
     values:
       - "True"
-  train_downstream_on_some_types:
-    values:
-      - "True"
-      # - "False"
-  downstream_cancer_types:
-    values:
-      - "1_least_common"
-      - "3_least_common"
-      - "5_least_common"
-      - "10_least_common"
-      - "20_least_common"
-      - "25_least_common"
-      - "all"
+  # train_downstream_on_some_types:
+  #   values:
+  #     - "True"
+  #     # - "False"
+  # downstream_cancer_types:
+  #   values:
+  #     - "1_least_common"
+  #     - "3_least_common"
+  #     - "5_least_common"
+  #     - "10_least_common"
+  #     - "20_least_common"
+  #     - "25_least_common"
+  #     - "all"
   use_sample_list:
     value: "True"
   # use_test_as_val_for_downstream:

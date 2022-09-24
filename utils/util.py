@@ -1,4 +1,5 @@
 import argparse
+from collections import abc
 import pandas as pd
 from pytorch_lightning import Trainer, seed_everything
 import torch
@@ -7,7 +8,7 @@ from models.lit_models import AutoEncoder, DownstreamModel, Comics
 import pytorch_lightning.loggers as pl_loggers
 from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
 import os
-from .datamodules import ABCDataModule
+from .datamodules import OmicsDataModule
 
 def parse_arguments(run_in_phases=False):
     parser = argparse.ArgumentParser(description='Runs the specified command')
@@ -31,7 +32,7 @@ def parse_arguments(run_in_phases=False):
     # trainer related arguments
     parser.add_argument("--exp_name", type=str, default="test")
     
-    parser = ABCDataModule.add_data_module_args(parser)
+    parser = OmicsDataModule.add_data_module_args(parser)
     
     if run_in_phases:
         parser = Comics.add_model_specific_args(parser)
@@ -52,16 +53,23 @@ def set_seeds(seed):
     seed_everything(seed, workers=True)
 
 def compute_input_shapes(abc_dm):
-    if isinstance(abc_dm.A_df, list):
-        A_shape = [A_ch.shape[0] for A_ch in abc_dm.A_df]
-    else:
-        A_shape = abc_dm.A_df.shape[0]
-    if isinstance(abc_dm.B_df, list):
-        B_shape = [B_ch.shape[0] for B_ch in abc_dm.B_df]
-    else:
-        B_shape = abc_dm.B_df.shape[0]
-    C_shape = abc_dm.C_df.shape[0]
-    return A_shape, B_shape, C_shape
+    shapes = []
+    if abc_dm.use_a:
+        if isinstance(abc_dm.A_df, list):
+            A_shape = [A_ch.shape[0] for A_ch in abc_dm.A_df]
+        else:
+            A_shape = abc_dm.A_df.shape[0]
+        shapes.append(A_shape)
+    if abc_dm.use_b:
+        if isinstance(abc_dm.B_df, list):
+            B_shape = [B_ch.shape[0] for B_ch in abc_dm.B_df]
+        else:
+            B_shape = abc_dm.B_df.shape[0]
+        shapes.append(B_shape)
+    if abc_dm.use_c:
+        C_shape = abc_dm.C_df.shape[0]
+        shapes.append(C_shape)
+    return shapes
 
 def define_callbacks_loggers_pretraining(param, checkpoint_path, count):
     if param.mask_B:

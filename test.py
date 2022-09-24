@@ -15,7 +15,7 @@ util.set_seeds(param.seed)
 
 fold = 0
 dict_args = vars(param)
-abc_dm = datamodules.ABCDataModule(fold, **dict_args)
+abc_dm = datamodules.OmicsDataModule(fold, **dict_args)
 abc_dm.mode = 'downstream'
 # checkpoint_path = os.path.join(param.checkpoints_dir, param.exp_name, 'fold-{}'.format(fold))
 # early_stopping, model_checkpoint, wandb_logger, csv_logger = util.define_callbacks_loggers_pretraining(param, checkpoint_path, fold)

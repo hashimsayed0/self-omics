@@ -159,7 +159,7 @@ class FCBlock(nn.Module):
         return y
 
         
-class AESepB(nn.Module):
+class AE_ABCSepB(nn.Module):
     """
         Defines a fully-connected variational autoencoder for multi-omics dataset
         DNA methylation input separated by chromosome
@@ -278,7 +278,7 @@ class AESepB(nn.Module):
     def forward(self, x):
         return self.encode(x)
 
-class AESepA(nn.Module):
+class AE_ABCSepA(nn.Module):
     """
         Defines a fully-connected variational autoencoder for multi-omics dataset
         DNA methylation input separated by chromosome
@@ -532,7 +532,7 @@ class AESepA(nn.Module):
         return self.encode(x)
 
 
-class AESepAB(nn.Module):
+class AE_ABCSepAB(nn.Module):
     """
         Defines a fully-connected variational autoencoder for multi-omics dataset
         DNA methylation input separated by chromosome
@@ -1046,8 +1046,116 @@ class AESepAB(nn.Module):
     def forward(self, x):
         return self.encode(x)
 
+class AE_SingleOmics(nn.Module):
+    """
+        Defines a fully-connected variational autoencoder for single-omics dataset
+        DNA methylation input separated by chromosome
+    """
+    def __init__(self, dim, latent_size, norm_layer=nn.BatchNorm1d, leaky_slope=0.2, dropout_p=0,
+                 dim_1=128, dim_2=1024):
+        """
+            Construct a fully-connected variational autoencoder
+            Parameters:
+                norm_layer              -- normalization layer
+                leaky_slope (float)     -- the negative slope of the Leaky ReLU activation function
+                dropout_p (float)       -- probability of an element to be zeroed in a dropout layer
+                latent_size (int)        -- the dimensionality of the latent space
+        """
 
-class VAESepB(nn.Module):
+        super().__init__()
+
+        if isinstance(dim, list):
+            self.sep = True
+            self.dim_list = dim
+        else:
+            self.sep = False
+            self.dim = dim
+        self.dim_1 = dim_1
+        self.dim_2 = dim_2
+
+        # ENCODER
+        if self.sep:
+            self.encode_fc_1_list = nn.ModuleList()
+            for i in range(0, 23):
+                self.encode_fc_1_list.append(
+                    FCBlock(self.dim_list[i], dim_1, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=dropout_p,
+                            activation=True))
+            self.encode_fc_2 = FCBlock(dim_1*23, dim_2, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=dropout_p,
+                                        activation=True)
+            
+        else:
+            self.encode_fc_1 = FCBlock(self.dim, dim_1, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=dropout_p,
+                                    activation=True)
+            self.encode_fc_2 = FCBlock(dim_1, dim_2, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=dropout_p,
+                                    activation=True)
+
+        self.encode_fc_3 = FCBlock(dim_2, latent_size, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=0,
+                                    activation=False, normalization=False)
+ 
+
+        # DECODER
+        self.decode_fc_3 = FCBlock(latent_size, dim_2, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=dropout_p,
+                                    activation=False, normalization=False)
+        if self.sep:
+            self.decode_fc_2 = FCBlock(dim_2, dim_1*23, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=dropout_p,
+                                    activation=True)
+            self.decode_fc_1_list = nn.ModuleList()
+            for i in range(0, 23):
+                self.decode_fc_1_list.append(
+                    FCBlock(dim_1, self.dim_list[i], norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=0,
+                            activation=False, normalization=False))
+        
+        else:
+            self.decode_fc_2 = FCBlock(dim_2, dim_1, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=dropout_p,
+                                activation=True)
+            self.decode_fc_1 = FCBlock(dim_1, self.dim, norm_layer=norm_layer, leaky_slope=leaky_slope, dropout_p=0,
+                                    activation=False, normalization=False)
+    
+    def encode(self, x):
+        if self.sep:
+            return self.encode_sep(x)
+        else:
+            return self.encode_nonsep(x)
+
+    def encode_sep(self, x):
+        level_2_list = []
+        for i in range(0, 23):
+            level_2_list.append(self.encode_fc_1_list[i](x[i]))
+        level_2 = torch.cat(level_2_list, 1)
+        level_3 = self.encode_fc_2(level_2)
+        h = self.encode_fc_3(level_3)
+        return h
+    
+    def encode_nonsep(self, x):
+        level_2 = self.encode_fc_1(x)
+        level_3 = self.encode_fc_2(level_2)
+        h = self.encode_fc_3(level_3)
+        return h
+
+    def decode(self, h):
+        if self.sep:
+            return self.decode_sep(h)
+        else:
+            return self.decode_nonsep(h)
+
+    def decode_sep(self, h):
+        level_3 = self.decode_fc_3(h)
+        level_2 = self.decode_fc_2(level_3)
+        recon_list = []
+        for i in range(0, 23):
+            recon_list.append(self.decode_fc_1_list[i](level_2.narrow(1, i * self.dim_1, self.dim_1)))
+        return recon_list
+    
+    def decode_nonsep(self, h):
+        level_3 = self.decode_fc_3(h)
+        level_2 = self.decode_fc_2(level_3)
+        recon = self.decode_fc_1(level_2)
+        return recon
+
+    def forward(self, x):
+        return self.encode(x)
+
+class VAE_ABCSepB(nn.Module):
     """
         Defines a fully-connected variational autoencoder for multi-omics dataset
         DNA methylation input separated by chromosome
@@ -1064,7 +1172,7 @@ class VAESepB(nn.Module):
                 latent_dim (int)        -- the dimensionality of the latent space
         """
 
-        super(VAESepB, self).__init__()
+        super(VAE_ABCSepB, self).__init__()
 
         self.A_dim = input_sizes[0]
         self.B_dim_list = input_sizes[1]
@@ -1190,7 +1298,7 @@ class VAESepB(nn.Module):
         return z, recon_x, mean, log_var
 
 
-class VAESepAB(nn.Module):
+class VAE_ABCSepAB(nn.Module):
     """
         Defines a fully-connected variational autoencoder for multi-omics dataset
         DNA methylation input separated by chromosome
@@ -1207,7 +1315,7 @@ class VAESepAB(nn.Module):
                 latent_dim (int)        -- the dimensionality of the latent space
         """
 
-        super(VAESepAB, self).__init__()
+        super(VAE_ABCSepAB, self).__init__()
 
         self.A_dim_list = input_sizes[0]
         self.B_dim_list = input_sizes[1]

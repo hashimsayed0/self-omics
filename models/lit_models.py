@@ -10,7 +10,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.optim import lr_scheduler
 import torch.nn.functional as F
-from .networks import SimCLRProjectionHead, CLIPProjectionHead, AESepB, AESepA, AESepAB, ClassifierNet, VAESepB, VAESepAB, SurvivalNet, RegressionNet
+from .networks import SimCLRProjectionHead, CLIPProjectionHead, AE_ABCSepB, AE_ABCSepA, AE_ABCSepAB, ClassifierNet, VAE_ABCSepB, VAE_ABCSepAB, SurvivalNet, RegressionNet, AE_SingleOmics
 from .losses import SimCLR_Loss, weighted_binary_cross_entropy, CLIPLoss, BarlowTwinsLoss, MTLR_survival_loss, NTXentLoss, SimSiamLoss, mmd_rbf
 from .optimizers import LARS
 from torchmetrics.functional import f1_score, auroc, precision, recall, accuracy
@@ -25,11 +25,8 @@ import os
 import string
 
 class AutoEncoder(pl.LightningModule):
-    def __init__(self, input_size_A, input_size_B, input_size_C, ae_net, ae_weight_kl, latent_size, projection_size, ae_lr, ae_weight_decay, ae_momentum, ae_drop_p, ae_beta1, ae_lr_policy, ae_epoch_num_decay, ae_decay_step_size, max_epochs, cont_align_loss_criterion, cont_loss_temp, cont_loss_lambda, ae_optimizer, ae_use_lrscheduler, cont_align_loss_weight, split_A, split_B, mask_A, mask_B, num_mask_A, num_mask_B, masking_method, batch_size, ae_dim_1B, ae_dim_2B, ae_dim_1A, ae_dim_2A, ae_dim_1C, ae_dim_2C, **config):
+    def __init__(self, ABC_shapes, ae_net, ae_weight_kl, latent_size, projection_size, ae_lr, ae_weight_decay, ae_momentum, ae_drop_p, ae_beta1, ae_lr_policy, ae_epoch_num_decay, ae_decay_step_size, max_epochs, cont_align_loss_criterion, cont_loss_temp, cont_loss_lambda, ae_optimizer, ae_use_lrscheduler, cont_align_loss_weight, split_A, split_B, mask_A, mask_B, num_mask_A, num_mask_B, masking_method, batch_size, ae_dim_1B, ae_dim_2B, ae_dim_1A, ae_dim_2A, ae_dim_1C, ae_dim_2C, **config):
         super(AutoEncoder, self).__init__()
-        self.input_size_A = input_size_A
-        self.input_size_B = input_size_B
-        self.input_size_C = input_size_C
         self.batch_size = batch_size
         self.ae_net = ae_net
         self.ae_weight_kl = ae_weight_kl
@@ -78,24 +75,59 @@ class AutoEncoder(pl.LightningModule):
         self.recon_all_thrice = config['recon_all_thrice']
         self.predict_masked_chromosomes = config['predict_masked_chromosomes']
         self.use_rep_trick = config['use_rep_trick']
+        self.omics_types = config['omics_types']
+        if self.omics_types == 'abc':
+            self.use_a, self.use_b, self.use_c = True, True, True
+            self.input_size_A, self.input_size_B, self.input_size_C = ABC_shapes
+        elif self.omics_types == 'a':
+            self.use_a, self.use_b, self.use_c = True, False, False
+            self.input_size_A = ABC_shapes[0]
+        elif self.omics_types == 'b':
+            self.use_a, self.use_b, self.use_c = False, True, False
+            self.input_size_B = ABC_shapes[0]
+        elif self.omics_types == 'c':
+            self.use_a, self.use_b, self.use_c = False, False, True
+            self.input_size_C = ABC_shapes[0]
         if self.ae_net == "ae":
-            if self.split_A and self.split_B:
-                self.ae_dim_1B = 128
-                self.ae_dim_1A = 128
-                self.ae = AESepAB((input_size_A, input_size_B, input_size_C), latent_size, self.use_one_encoder, self.use_one_decoder, self.concat_latent_for_decoder, self.recon_all_thrice, self.use_rep_trick, dropout_p=ae_drop_p, dim_1B=self.ae_dim_1B, dim_2B=ae_dim_2B, dim_1A=self.ae_dim_1A, dim_2A=ae_dim_2A, dim_1C=ae_dim_1C, dim_2C=ae_dim_2C)
-            elif self.split_A:
-                self.ae_dim_1A = 128
-                self.ae_dim_1B = 1024
-                self.ae = AESepA((input_size_A, input_size_B, input_size_C), latent_size, self.use_one_decoder, self.concat_latent_for_decoder, self.recon_all_thrice, dropout_p=ae_drop_p, dim_1B=self.ae_dim_1B, dim_2B=ae_dim_2B, dim_1A=self.ae_dim_1A, dim_2A=ae_dim_2A, dim_1C=ae_dim_1C, dim_2C=ae_dim_2C)
-            elif self.split_B:
-                self.ae_dim_1B = 128
-                self.ae_dim_1A = 1024
-                self.ae = AESepB((input_size_A, input_size_B, input_size_C), latent_size, dropout_p=ae_drop_p, dim_1B=self.ae_dim_1B, dim_2B=ae_dim_2B, dim_1A=self.ae_dim_1A, dim_2A=ae_dim_2A, dim_1C=ae_dim_1C, dim_2C=ae_dim_2C)
+            if self.omics_types == 'abc':
+                if self.split_A and self.split_B:
+                    self.ae_dim_1B = 128
+                    self.ae_dim_1A = 128
+                    self.ae = AE_ABCSepAB((self.input_size_A, self.input_size_B, self.input_size_C), latent_size, self.use_one_encoder, self.use_one_decoder, self.concat_latent_for_decoder, self.recon_all_thrice, self.use_rep_trick, dropout_p=ae_drop_p, dim_1B=self.ae_dim_1B, dim_2B=ae_dim_2B, dim_1A=self.ae_dim_1A, dim_2A=ae_dim_2A, dim_1C=ae_dim_1C, dim_2C=ae_dim_2C)
+                elif self.split_A:
+                    self.ae_dim_1A = 128
+                    self.ae_dim_1B = 1024
+                    self.ae = AE_ABCSepA((self.input_size_A, self.input_size_B, self.input_size_C), latent_size, self.use_one_decoder, self.concat_latent_for_decoder, self.recon_all_thrice, dropout_p=ae_drop_p, dim_1B=self.ae_dim_1B, dim_2B=ae_dim_2B, dim_1A=self.ae_dim_1A, dim_2A=ae_dim_2A, dim_1C=ae_dim_1C, dim_2C=ae_dim_2C)
+                elif self.split_B:
+                    self.ae_dim_1B = 128
+                    self.ae_dim_1A = 1024
+                    self.ae = AE_ABCSepB((self.input_size_A, self.input_size_B, self.input_size_C), latent_size, dropout_p=ae_drop_p, dim_1B=self.ae_dim_1B, dim_2B=ae_dim_2B, dim_1A=self.ae_dim_1A, dim_2A=ae_dim_2A, dim_1C=ae_dim_1C, dim_2C=ae_dim_2C)
+            elif self.omics_types in ['a', 'b', 'c']:
+                if self.omics_types == 'a':
+                    self.input_size = self.input_size_A
+                    if self.split_A:
+                        self.ae_dim_1 = 128
+                    else:
+                        self.ae_dim_1 = 1024
+                    self.ae_dim_2 = ae_dim_2A
+                elif self.omics_types == 'b':
+                    self.input_size = self.input_size_B
+                    if self.split_B:
+                        self.ae_dim_1 = 128
+                    else:
+                        self.ae_dim_1 = 1024
+                    self.ae_dim_2 = ae_dim_2B
+                elif self.omics_types == 'c':
+                    self.input_size = self.input_size_C
+                    self.ae_dim_1 = 1024
+                    self.ae_dim_2 = ae_dim_2C
+                self.ae = AE_SingleOmics(self.input_size, self.latent_size, dropout_p=ae_drop_p, dim_1=self.ae_dim_1, dim_2=self.ae_dim_2)
+                
         elif self.ae_net == "vae":
             if self.split_A and self.split_B:
-                self.ae = VAESepAB((input_size_A, input_size_B, input_size_C), latent_size, dropout_p=ae_drop_p, dim_1B=ae_dim_1B, dim_2B=ae_dim_2B, dim_1A=ae_dim_1A, dim_2A=ae_dim_2A, dim_1C=ae_dim_1C, dim_2C=ae_dim_2C)
+                self.ae = VAE_ABCSepAB((self.input_size_A, self.input_size_B, self.input_size_C), latent_size, dropout_p=ae_drop_p, dim_1B=ae_dim_1B, dim_2B=ae_dim_2B, dim_1A=ae_dim_1A, dim_2A=ae_dim_2A, dim_1C=ae_dim_1C, dim_2C=ae_dim_2C)
             elif self.split_B:
-                self.ae = VAESepB((input_size_A, input_size_B, input_size_C), latent_size, dropout_p=ae_drop_p, dim_1B=ae_dim_1B, dim_2B=ae_dim_2B, dim_1A=ae_dim_1A, dim_2A=ae_dim_2A, dim_1C=ae_dim_1C, dim_2C=ae_dim_2C)
+                self.ae = VAE_ABCSepB((self.input_size_A, self.input_size_B, self.input_size_C), latent_size, dropout_p=ae_drop_p, dim_1B=ae_dim_1B, dim_2B=ae_dim_2B, dim_1A=ae_dim_1A, dim_2A=ae_dim_2A, dim_1C=ae_dim_1C, dim_2C=ae_dim_2C)
         
         if self.recon_loss_criterion != "none":
             if self.recon_loss_criterion == "mse":
@@ -148,12 +180,18 @@ class AutoEncoder(pl.LightningModule):
         if self.add_consistency_loss:
             self.cons_loss = nn.MSELoss()
         
-        if self.mask_B:
+        if self.use_b and self.mask_B:
             self.mask_B_ids = np.random.randint(0, len(self.input_size_B), size=self.num_mask_B)
-        if self.mask_A:
+        else:
+            self.mask_B_ids = None
+        if self.use_a and self.mask_A:
             self.mask_A_ids = np.random.randint(0, len(self.input_size_A), size=self.num_mask_A)
-        if self.mask_C:
+        else:
+            self.mask_A_ids = None
+        if self.use_c and self.mask_C:
             self.mask_C_features = np.random.randint(0, self.input_size_C, size=int(self.ratio_mask_C * self.input_size_C))
+        else:
+            self.mask_C_features = None
         
         self.change_ch_to_mask_every_epoch = config['change_ch_to_mask_every_epoch']
 
@@ -296,11 +334,11 @@ class AutoEncoder(pl.LightningModule):
     def on_train_epoch_start(self):
         super().on_train_epoch_start()
         if self.change_ch_to_mask_every_epoch:
-            if self.mask_B:
+            if self.use_b and self.mask_B:
                 self.mask_B_ids = np.random.randint(0, len(self.input_size_B), size=self.num_mask_B)
-            if self.mask_A:
+            if self.use_a and self.mask_A:
                 self.mask_A_ids = np.random.randint(0, len(self.input_size_A), size=self.num_mask_A)
-            if self.mask_C:
+            if self.use_c and self.mask_C:
                 self.mask_C_features = np.random.randint(0, self.input_size_C, size=int(self.ratio_mask_C * self.input_size_C))
         if self.choose_masking_method_every_epoch:
             self.masking_method = np.random.choice(['zero', 'gaussian_noise', 'swap_noise'])
@@ -411,6 +449,27 @@ class AutoEncoder(pl.LightningModule):
             h_A, h_B, h_C = (h_A + h_A_unmasked) / 2, (h_B + h_B_unmasked) / 2, (h_C + h_C_unmasked) / 2
         
         return logs, (h_A, h_B, h_C), pretext_loss 
+    
+    def ae_single_omics_step(self, batch, omics_type, split, mask, mask_ids):
+        logs = {}
+        pretext_loss = 0
+        x = batch['x'][0]
+        x_in = x
+        if mask:
+            if omics_type == 'C':
+                x_in = self.mask_x_feat(x, mask_ids)
+            else:
+                x_in = self.mask_x_ch(x, mask_ids)
+        h = self.ae.encode(x_in)
+        if self.recon_loss_criterion != "none":
+            x_recon = self.ae.decode(h)
+            if split:
+                recon_loss = self.sum_subset_losses(x_recon, x)
+            else:
+                recon_loss = self.recon_criterion(x_recon, x)
+            logs['{}_recon_{}_loss'.format(self.mode, omics_type)] = recon_loss
+            pretext_loss += recon_loss
+        return logs, h, pretext_loss
     
     def vae_step(self, batch):
         logs = {}
@@ -600,7 +659,20 @@ class AutoEncoder(pl.LightningModule):
     def _shared_step(self, batch, batch_idx):
         pretext_loss = 0
         if self.ae_net == 'ae':
-            logs, h, recon_loss = self.ae_step(batch) 
+            if self.omics_types == 'abc':
+                logs, h, recon_loss = self.ae_step(batch) 
+            elif self.omics_types in ['a', 'b', 'c']:
+                if self.omics_types == 'a':
+                    logs, h, recon_loss = self.ae_single_omics_step(batch, 'A', self.split_A, self.mask_A, self.mask_A_ids)
+                elif self.omics_types == 'b':
+                    logs, h, recon_loss = self.ae_single_omics_step(batch, 'B', self.split_B, self.mask_B, self.mask_B_ids)
+                elif self.omics_types == 'c':
+                    logs, h, recon_loss = self.ae_single_omics_step(batch, 'C', False, self.mask_C, self.mask_C_features)    
+                pretext_loss += recon_loss
+                logs['{}_pretext_loss'.format(self.mode)] = pretext_loss
+                for k, v in logs.items():
+                    self.log(k, v, on_step=False, on_epoch=True)
+                return logs
         elif self.ae_net == 'vae':
             logs, h, recon_loss = self.vae_step(batch)
         pretext_loss += recon_loss
@@ -648,103 +720,11 @@ class AutoEncoder(pl.LightningModule):
         return self._shared_step(batch, batch_idx)
 
 
-    # def training_step(self, batch, batch_idx):
-    #     if self.ae_net == 'ae':
-    #         logs, h, pretext_loss = self.ae_step(batch) 
-    #     elif self.ae_net == 'vae':
-    #         logs, h, pretext_loss = self.vae_step(batch)
-    #     for k, v in logs.items():
-    #         self.log(k, v, on_step=False, on_epoch=True)
-    #     if self.add_distance_loss_to_latent:
-    #         logs, dist_loss = self.dist_step(h)
-    #         pretext_loss += dist_loss * self.distance_loss_weight
-    #         self.log('{}_dist_loss_btw_latent'.format(self.mode), dist_loss, on_step=False, on_epoch=True)
-    #     if self.add_consistency_loss:
-    #         logs, cons_loss = self.cons_step(h)
-    #         pretext_loss += cons_loss * self.consistency_loss_weight
-    #         self.log('{}_cons_loss'.format(self.mode), cons_loss, on_step=False, on_epoch=True)
-    #     if self.hparams.add_MMD_loss:
-    #         logs, MMD_loss = self.MMD_step(h)
-    #         pretext_loss += MMD_loss * self.hparams.MMD_loss_weight
-    #         self.log('{}_MMD_loss'.format(self.mode), MMD_loss, on_step=False, on_epoch=True)
-    #     if self.hparams.add_latent_reconstruction_loss:
-    #         logs, latent_recon_loss = self.latent_recon_step(h)
-    #         pretext_loss += latent_recon_loss * self.hparams.latent_reconstruction_loss_weight
-    #         self.log('{}_latent_recon_loss'.format(self.mode), latent_recon_loss, on_step=False, on_epoch=True)
-    #     if self.cont_align_loss_criterion != "none":
-    #         if self.cont_align_loss_criterion in ['barlowtwins', 'clip'] or h[0].shape[0] == self.batch_size:
-    #             self.cont_pair = 'align'
-    #             logs, cont_loss = self.cont_align_step(h)
-    #             for k, v in logs.items():
-    #                 self.log(k, v, on_step=False, on_epoch=True)
-    #             pretext_loss += self.cont_align_loss_weight * cont_loss
-    #             if self.add_cont_type_loss:
-    #                 h_list = self.prepare_cont_type_h(h, batch['y'])
-    #                 for i, h_type in enumerate(h_list):
-    #                     self.cont_pair = 'align_type'
-    #                     logs, cont_loss = self.cont_align_step(h_type)
-    #                     for k, v in logs.items():
-    #                         self.log(k, v, on_step=False, on_epoch=True)
-    #                     pretext_loss += self.cont_align_loss_weight * cont_loss
-    #     self.log('{}_pretext_loss'.format(self.mode), pretext_loss, on_step=False, on_epoch=True)
-    #     return pretext_loss
-    
-    # def validation_step(self, batch, batch_idx):
-    #     # if self.global_step == 0: 
-    #     #     wandb.define_metric('val_pretext_loss', summary='min')
-    #     #     wandb.define_metric('val_recon_loss', summary='min')
-    #     self.mode = 'val'
-    #     pretext_loss = 0
-    #     if self.ae_net == 'ae':
-    #         logs, h, recon_loss = self.ae_step(batch) 
-    #     elif self.ae_net == 'vae':
-    #         logs, h, recon_loss = self.vae_step(batch)
-    #     pretext_loss += recon_loss
-    #     if self.add_distance_loss_to_latent:
-    #         _, dist_loss = self.dist_step(h)
-    #         pretext_loss += dist_loss * self.distance_loss_weight
-    #         logs['{}_dist_loss'.format(self.mode)] = dist_loss
-    #     if self.add_consistency_loss:
-    #         _, cons_loss = self.cons_step(h)
-    #         pretext_loss += cons_loss * self.consistency_loss_weight
-    #         logs['{}_cons_loss'.format(self.mode)] = cons_loss
-    #     if self.hparams.add_MMD_loss:
-    #         _, MMD_loss = self.MMD_step(h)
-    #         pretext_loss += MMD_loss * self.hparams.MMD_loss_weight
-    #         logs['{}_MMD_loss'.format(self.mode)] = MMD_loss
-    #     if self.hparams.add_latent_reconstruction_loss:
-    #         _, latent_recon_loss = self.latent_recon_step(h)
-    #         pretext_loss += latent_recon_loss * self.hparams.latent_reconstruction_loss_weight
-    #         logs['{}_latent_recon_loss'.format(self.mode)] = latent_recon_loss
-    #     if self.cont_align_loss_criterion != "none":
-    #         cont_logs = {}
-    #         if self.cont_align_loss_criterion in ['barlowtwins', 'clip'] or h[0].shape[0] == self.batch_size:
-    #             self.cont_pair = 'align'
-    #             cont_pair_logs, cont_loss = self.cont_align_step(h)
-    #             cont_logs.update(cont_pair_logs)
-    #             pretext_loss += self.cont_align_loss_weight * cont_loss
-    #             if self.add_cont_type_loss:
-    #                 h_list = self.prepare_cont_type_h(h, batch['y'])
-    #                 for i, h_type in enumerate(h_list):
-    #                     self.cont_pair = 'align_type'
-    #                     cont_pair_logs, cont_loss = self.cont_align_step(h_type)
-    #                     cont_logs.update(cont_pair_logs)
-    #                     pretext_loss += self.cont_align_loss_weight * cont_loss
-    #         logs.update(cont_logs)
-    #     logs['{}_pretext_loss'.format(self.mode)] = pretext_loss
-    #     return logs
-
-    # def validation_epoch_end(self, outputs):
-    #     for key, value in outputs[0].items():
-    #         avg = torch.stack([x[key] for x in outputs if key in x.keys()]).mean()
-    #         self.log(key, avg)
-        
-
-
 class DownstreamModel(pl.LightningModule):
-    def __init__(self, ae_model_path, A_shape, B_shape, C_shape, class_weights, **config):
+    def __init__(self, ae_model_path, ABC_shapes, class_weights, **config):
         super(DownstreamModel, self).__init__()
         self.ae_model_path = ae_model_path
+        self.omics_types = config['omics_types']
         self.ds_drop_p = config['ds_drop_p']
         self.num_classes = config['num_classes']
         self.ds_lr = config['ds_lr']
@@ -768,20 +748,23 @@ class DownstreamModel(pl.LightningModule):
         self.ds_mask_B = config['ds_mask_B']
         self.ds_masking_method = config['ds_masking_method']
         if self.ae_model_path is None:
-            self.ae_model = AutoEncoder(A_shape, B_shape, C_shape, **config)
+            self.ae_model = AutoEncoder(ABC_shapes, **config)
         else:
             self.ae_model = AutoEncoder.load_from_checkpoint(self.ae_model_path)
         if config['ds_freeze_ae']:
             self.ae_model.freeze()
         self.ds_latent_agg_method = config['ds_latent_agg_method']
         self.ds_add_omics_identity = config['ds_add_omics_identity']
-        if self.ds_add_omics_identity:
-            self.ds_latent_agg_method = 'all'
-        elif self.ds_latent_agg_method in ['concat', 'concatpw']:
-            self.ds_input_size = config['latent_size'] * 3
-        elif self.ds_latent_agg_method in ['concat_and_mean', 'concatpw_with_mean']:
-            self.ds_input_size = config['latent_size'] * 4
-        else:
+        if self.omics_types == 'abc':
+            if self.ds_add_omics_identity:
+                self.ds_latent_agg_method = 'all'
+            elif self.ds_latent_agg_method in ['concat', 'concatpw']:
+                self.ds_input_size = config['latent_size'] * 3
+            elif self.ds_latent_agg_method in ['concat_and_mean', 'concatpw_with_mean']:
+                self.ds_input_size = config['latent_size'] * 4
+            else:
+                self.ds_input_size = config['latent_size']
+        elif self.omics_types in ['a', 'b', 'c']:
             self.ds_input_size = config['latent_size']
         self.num_classes = config['num_classes']
         self.ds_drop_p = config['ds_drop_p']
@@ -871,32 +854,35 @@ class DownstreamModel(pl.LightningModule):
 
     def forward(self, x):
         if self.ae_net == 'ae':
-            h_A, h_B, h_C = self.ae_model(x)
-            if self.ds_latent_agg_method == 'concat':
-                h = torch.cat([h_A, h_B, h_C], dim=1)
-            elif self.ds_latent_agg_method == 'concat_and_mean':
-                h = torch.cat([h_A, h_B, h_C, torch.mean(torch.stack([h_A, h_B, h_C]), axis=0)], dim=1)
-            elif self.ds_latent_agg_method == 'concatpw':
-                h = torch.zeros(h_A.shape[0], h_A.shape[1]*3).to(self.device)
-                for i in range(h_A.shape[0]):
-                    for j in range(h_A.shape[1]):
-                        h[i, j*3] = h_A[i, j]
-                        h[i, j*3+1] = h_B[i, j]
-                        h[i, j*3+2] = h_C[i, j]
-            elif self.ds_latent_agg_method == 'concatpw_with_mean':
-                h = torch.zeros(h_A.shape[0], h_A.shape[1]*4).to(self.device)
-                for i in range(h_A.shape[0]):
-                    for j in range(h_A.shape[1]):
-                        h[i, j*4] = h_A[i, j]
-                        h[i, j*4+1] = h_B[i, j]
-                        h[i, j*4+2] = h_C[i, j]
-                        h[i, j*4+3] = torch.mean(torch.stack([h_A[i, j], h_B[i, j], h_C[i, j]]), axis=0)
-            elif self.ds_latent_agg_method == 'mean':
-                h = torch.mean(torch.stack([h_A, h_B, h_C]), axis=0)
-            elif self.ds_latent_agg_method == 'sum':
-                h = torch.sum(torch.stack([h_A, h_B, h_C]), axis=0)
-            elif self.ds_latent_agg_method == 'all':
-                h = [h_A, h_B, h_C]
+            if self.omics_types == 'abc':
+                h_A, h_B, h_C = self.ae_model(x)
+                if self.ds_latent_agg_method == 'concat':
+                    h = torch.cat([h_A, h_B, h_C], dim=1)
+                elif self.ds_latent_agg_method == 'concat_and_mean':
+                    h = torch.cat([h_A, h_B, h_C, torch.mean(torch.stack([h_A, h_B, h_C]), axis=0)], dim=1)
+                elif self.ds_latent_agg_method == 'concatpw':
+                    h = torch.zeros(h_A.shape[0], h_A.shape[1]*3).to(self.device)
+                    for i in range(h_A.shape[0]):
+                        for j in range(h_A.shape[1]):
+                            h[i, j*3] = h_A[i, j]
+                            h[i, j*3+1] = h_B[i, j]
+                            h[i, j*3+2] = h_C[i, j]
+                elif self.ds_latent_agg_method == 'concatpw_with_mean':
+                    h = torch.zeros(h_A.shape[0], h_A.shape[1]*4).to(self.device)
+                    for i in range(h_A.shape[0]):
+                        for j in range(h_A.shape[1]):
+                            h[i, j*4] = h_A[i, j]
+                            h[i, j*4+1] = h_B[i, j]
+                            h[i, j*4+2] = h_C[i, j]
+                            h[i, j*4+3] = torch.mean(torch.stack([h_A[i, j], h_B[i, j], h_C[i, j]]), axis=0)
+                elif self.ds_latent_agg_method == 'mean':
+                    h = torch.mean(torch.stack([h_A, h_B, h_C]), axis=0)
+                elif self.ds_latent_agg_method == 'sum':
+                    h = torch.sum(torch.stack([h_A, h_B, h_C]), axis=0)
+                elif self.ds_latent_agg_method == 'all':
+                    h = [h_A, h_B, h_C]
+            elif self.omics_types in ['a', 'b', 'c']:
+                h = self.ae_model(x)
         elif self.ae_net == 'vae':
             h, _, _, _ = self.ae_model(x)
         return h
@@ -935,15 +921,19 @@ class DownstreamModel(pl.LightningModule):
         return output_dict
 
     def class_step(self, batch):
-        x_A, x_B, x_C = batch['x']
+        if self.omics_types == 'abc':
+            x_A, x_B, x_C = batch['x']
+            if self.ds_mask_A:
+                x_A = self.mask_x_ch(x_A)
+            if self.ds_mask_B:
+                x_B = self.mask_x_ch(x_B)
+            h = self.forward((x_A, x_B, x_C))
+        elif self.omics_types in ['a', 'b', 'c']:
+            x = batch['x'][0]
+            h = self.forward(x)
         y = batch['y']
         sample_ids = batch['sample_id']
-        if self.ds_mask_A:
-            x_A = self.mask_x_ch(x_A)
-        if self.ds_mask_B:
-            x_B = self.mask_x_ch(x_B)
-        h = self.forward((x_A, x_B, x_C))
-        if self.ds_add_omics_identity:
+        if self.ds_add_omics_identity and self.omics_types == 'abc':
             down_loss = 0
             y_prob_omic = []
             for i, h_omic in enumerate(h):
@@ -960,7 +950,6 @@ class DownstreamModel(pl.LightningModule):
             y_prob = torch.mean(torch.stack(y_prob_omic), axis=0)
             _, y_pred = torch.max(y_prob, 1)
             h = torch.cat(h, dim=1)
-            
         else:
             y_out = self.class_net(h)
             if self.cl_loss == "wbce":
@@ -991,10 +980,14 @@ class DownstreamModel(pl.LightningModule):
         return x_masked
     
     def surv_step(self, batch):
-        x_A, x_B, x_C = batch['x']
+        if self.omics_types == 'abc':
+            x_A, x_B, x_C = batch['x']
+            h = self.forward((x_A, x_B, x_C))
+        elif self.omics_types in ['a', 'b', 'c']:
+            x = batch['x'][0]
+            h = self.forward(x)
         sample_ids = batch['sample_id']
         surv_T, surv_E, y_true = batch['survival']
-        h = self.forward((x_A, x_B, x_C))
         y_out = self.surv_net(h)
         if self.survival_loss == 'MTLR':
             down_loss = MTLR_survival_loss(y_out, y_true, surv_E, self.tri_matrix_1)
@@ -1013,10 +1006,14 @@ class DownstreamModel(pl.LightningModule):
         }
     
     def reg_step(self, batch):
-        x_A, x_B, x_C = batch['x']
+        if self.omics_types == 'abc':
+            x_A, x_B, x_C = batch['x']
+            h = self.forward((x_A, x_B, x_C))
+        elif self.omics_types in ['a', 'b', 'c']:
+            x = batch['x'][0]
+            h = self.forward(x)
         v = batch['value']
         sample_ids = batch['sample_id']
-        h = self.forward((x_A, x_B, x_C))
         v_bar = self.reg_net(h)
         loss = self.reg_loss(v_bar, v)
         return {
@@ -1204,20 +1201,20 @@ class Comics(pl.LightningModule):
             if self.hparams.split_A and self.hparams.split_B:
                 self.hparams.ae_dim_1B = 128
                 self.hparams.ae_dim_1A = 128
-                self.ae = AESepAB((self.hparams.input_size_A, self.hparams.input_size_B, self.hparams.input_size_C), self.hparams.latent_size, self.hparams.use_one_encoder, self.hparams.use_one_decoder, self.hparams.concat_latent_for_decoder, self.hparams.recon_all_thrice, self.hparams.use_rep_trick, dropout_p=self.hparams.ae_drop_p, dim_1B=self.hparams.ae_dim_1B, dim_2B=self.hparams.ae_dim_2B, dim_1A=self.hparams.ae_dim_1A, dim_2A=self.hparams.ae_dim_1A, dim_1C=self.hparams.ae_dim_1C, dim_2C=self.hparams.ae_dim_2C)
+                self.ae = AE_ABCSepAB((self.hparams.input_size_A, self.hparams.input_size_B, self.hparams.input_size_C), self.hparams.latent_size, self.hparams.use_one_encoder, self.hparams.use_one_decoder, self.hparams.concat_latent_for_decoder, self.hparams.recon_all_thrice, self.hparams.use_rep_trick, dropout_p=self.hparams.ae_drop_p, dim_1B=self.hparams.ae_dim_1B, dim_2B=self.hparams.ae_dim_2B, dim_1A=self.hparams.ae_dim_1A, dim_2A=self.hparams.ae_dim_1A, dim_1C=self.hparams.ae_dim_1C, dim_2C=self.hparams.ae_dim_2C)
             elif self.hparams.split_A:
                 self.hparams.ae_dim_1A = 128
                 self.hparams.ae_dim_1B = 1024
-                self.ae = AESepA((self.hparams.input_size_A, self.hparams.input_size_B, self.hparams.input_size_C), self.hparams.latent_size, self.hparams.use_one_decoder, self.hparams.concat_latent_for_decoder, self.hparams.recon_all_thrice, dropout_p=self.hparams.ae_drop_p, dim_1B=self.hparams.ae_dim_1B, dim_2B=self.hparams.ae_dim_2B, dim_1A=self.hparams.ae_dim_1A, dim_2A=self.hparams.ae_dim_2A, dim_1C=self.hparams.ae_dim_1C, dim_2C=self.hparams.ae_dim_2C)
+                self.ae = AE_ABCSepA((self.hparams.input_size_A, self.hparams.input_size_B, self.hparams.input_size_C), self.hparams.latent_size, self.hparams.use_one_decoder, self.hparams.concat_latent_for_decoder, self.hparams.recon_all_thrice, dropout_p=self.hparams.ae_drop_p, dim_1B=self.hparams.ae_dim_1B, dim_2B=self.hparams.ae_dim_2B, dim_1A=self.hparams.ae_dim_1A, dim_2A=self.hparams.ae_dim_2A, dim_1C=self.hparams.ae_dim_1C, dim_2C=self.hparams.ae_dim_2C)
             elif self.hparams.split_B:
                 self.hparams.ae_dim_1B = 128
                 self.hparams.ae_dim_1A = 1024
-                self.ae = AESepB((self.hparams.input_size_A, self.hparams.input_size_B, self.hparams.input_size_C), self.hparams.latent_size, dropout_p=self.hparams.ae_drop_p, dim_1B=self.hparams.ae_dim_1B, dim_2B=self.hparams.ae_dim_2B, dim_1A=self.hparams.ae_dim_1A, dim_2A=self.hparams.ae_dim_2A, dim_1C=self.hparams.ae_dim_1C, dim_2C=self.hparams.ae_dim_2C)
+                self.ae = AE_ABCSepB((self.hparams.input_size_A, self.hparams.input_size_B, self.hparams.input_size_C), self.hparams.latent_size, dropout_p=self.hparams.ae_drop_p, dim_1B=self.hparams.ae_dim_1B, dim_2B=self.hparams.ae_dim_2B, dim_1A=self.hparams.ae_dim_1A, dim_2A=self.hparams.ae_dim_2A, dim_1C=self.hparams.ae_dim_1C, dim_2C=self.hparams.ae_dim_2C)
         elif self.hparams.ae_net == "vae":
             if self.hparams.split_A and self.hparams.split_B:
-                self.ae = VAESepAB((self.hparams.input_size_A, self.hparams.input_size_B, self.hparams.input_size_C), self.hparams.latent_size, dropout_p=self.hparams.ae_drop_p, dim_1B=self.hparams.ae_dim_1B, dim_2B=self.hparams.ae_dim_2B, dim_1A=self.hparams.ae_dim_1A, dim_2A=self.hparams.ae_dim_2A, dim_1C=self.hparams.ae_dim_1C, dim_2C=self.hparams.ae_dim_2C)
+                self.ae = VAE_ABCSepAB((self.hparams.input_size_A, self.hparams.input_size_B, self.hparams.input_size_C), self.hparams.latent_size, dropout_p=self.hparams.ae_drop_p, dim_1B=self.hparams.ae_dim_1B, dim_2B=self.hparams.ae_dim_2B, dim_1A=self.hparams.ae_dim_1A, dim_2A=self.hparams.ae_dim_2A, dim_1C=self.hparams.ae_dim_1C, dim_2C=self.hparams.ae_dim_2C)
             elif self.hparams.split_B:
-                self.ae = VAESepB((self.hparams.input_size_A, self.hparams.input_size_B, self.hparams.input_size_C), self.hparams.latent_size, dropout_p=self.hparams.ae_drop_p, dim_1B=self.hparams.ae_dim_1B, dim_2B=self.hparams.ae_dim_2B, dim_1A=self.hparams.ae_dim_1A, dim_2A=self.hparams.ae_dim_2A, dim_1C=self.hparams.ae_dim_1C, dim_2C=self.hparams.ae_dim_2C)
+                self.ae = VAE_ABCSepB((self.hparams.input_size_A, self.hparams.input_size_B, self.hparams.input_size_C), self.hparams.latent_size, dropout_p=self.hparams.ae_drop_p, dim_1B=self.hparams.ae_dim_1B, dim_2B=self.hparams.ae_dim_2B, dim_1A=self.hparams.ae_dim_1A, dim_2A=self.hparams.ae_dim_2A, dim_1C=self.hparams.ae_dim_1C, dim_2C=self.hparams.ae_dim_2C)
         
         self.hparams.projection_size = self.hparams.latent_size // 2
         if self.hparams.cont_align_loss_criterion != "none":

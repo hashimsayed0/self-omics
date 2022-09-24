@@ -15,7 +15,7 @@ util.set_seeds(param.seed)
 param.train_in_phases = True 
 fold = 0
 dict_args = vars(param)
-abc_dm = datamodules.ABCDataModule(fold, **dict_args)
+abc_dm = datamodules.OmicsDataModule(fold, **dict_args)
 abc_dm.mode = 'downstream'
 abc_dm.phase = 'p2'
 model = lit_models.Comics.load_from_checkpoint(param.model_path)
