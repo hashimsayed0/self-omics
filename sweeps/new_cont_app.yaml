@@ -2,7 +2,7 @@ method: grid
 metric:
   goal: maximize
   name: test_accuracy
-name: semi_sup_single_omics
+name: semi_sup_k_fold
 parameters:
   add_distance_loss_to_latent:
     values:
@@ -134,14 +134,14 @@ parameters:
       - class
   exp_name:
     values:
-      - semi_sup_single_omics
+      - semi_sup_k_fold
   fold_idx:
     values:
       - "0"
-      # - "1"
-      # - "2"
-      # - "3"
-      # - "4"
+      - "1"
+      - "2"
+      - "3"
+      - "4"
   gpus:
     values:
       - "-1"
@@ -184,13 +184,14 @@ parameters:
       - "a"
       - "b"
       - "c"
+      - "abc"
   pretraining_max_epochs:
     values:
   #     # - "15"
-      - "30"
+      # - "30"
       - "100"
-      - "50"
-      # - "0"
+      # - "50"
+      - "0"
       # - "15"
       # - "25"
   #     - "200"
