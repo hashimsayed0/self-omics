@@ -1,5 +1,5 @@
 # Self-omics: A Self-supervised Learning Framework for Multi-omics Cancer Data
-Published in in Pacific Symposium on Biocomputing © 2022 World Scientific Publishing Co., Singapore, [http://psb.stanford.edu/](http://psb.stanford.edu/)
+Published in Pacific Symposium on Biocomputing © 2022 World Scientific Publishing Co., Singapore, [http://psb.stanford.edu/](http://psb.stanford.edu/)
 
 Paper: [https://psb.stanford.edu/psb-online/proceedings/psb23/hashim.pdf](https://psb.stanford.edu/psb-online/proceedings/psb23/hashim.pdf)
 
